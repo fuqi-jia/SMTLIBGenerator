@@ -8,6 +8,8 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <filesystem>
+#include <algorithm>
 
 namespace SMTLIBGenerator {
 
@@ -19,6 +21,12 @@ Generator::Generator(unsigned int seed, double decay_prob)
     
     // 默认加载QF_LIA理论
     loadTheory("QF_LIA");
+}
+
+// 设置布尔变量生成概率
+void Generator::setBoolVarProbability(double probability) {
+    // 确保概率值在有效范围内
+    bool_var_probability = std::max(0.0, std::min(1.0, probability));
 }
 
 // 设置逻辑类型
@@ -63,6 +71,69 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
     // 有一定概率创建新变量，否则使用现有变量或创建常量
     std::uniform_real_distribution<double> dist(0.0, 1.0);
     double random_val = dist(rng);
+    
+    // 如果是布尔类型，且随机值大于布尔变量生成概率，则尝试生成非布尔类型
+    if (sort->isBool() && random_val > bool_var_probability) {
+        // 如果不是强制要求布尔类型，则根据逻辑类型生成整数或实数变量
+        std::shared_ptr<SMTLIBParser::Sort> non_bool_sort;
+        if (logic == "QF_LIA") {
+            non_bool_sort = SMTLIBParser::INT_SORT;
+        } else if (logic == "NTA") {
+            non_bool_sort = SMTLIBParser::REAL_SORT;
+        } else {
+            non_bool_sort = SMTLIBParser::INT_SORT;
+        }
+        
+        // 生成一个比较表达式，结果是布尔类型
+        auto left = generateVariable(non_bool_sort);
+        auto right = generateVariable(non_bool_sort);
+        
+        // 随机选择一个比较操作符
+        std::vector<SMTLIBParser::NODE_KIND> comparison_ops = {
+            SMTLIBParser::NODE_KIND::NT_EQ,
+            SMTLIBParser::NODE_KIND::NT_LE,
+            SMTLIBParser::NODE_KIND::NT_LT,
+            SMTLIBParser::NODE_KIND::NT_GE,
+            SMTLIBParser::NODE_KIND::NT_GT
+        };
+        
+        std::uniform_int_distribution<size_t> op_dist(0, comparison_ops.size() - 1);
+        SMTLIBParser::NODE_KIND selected_op = comparison_ops[op_dist(rng)];
+        
+        // 创建比较表达式
+        result = parser->mkOper(SMTLIBParser::BOOL_SORT, selected_op, left, right);
+        
+        // 计算表达式的值并保存
+        if (left->isVar() && right->isVar() && 
+            variable_values.count(left->getName()) && variable_values.count(right->getName())) {
+            auto left_value = variable_values[left->getName()];
+            auto right_value = variable_values[right->getName()];
+            
+            bool comparison_result = false;
+            
+            if (left_value->isConst() && right_value->isConst()) {
+                if (selected_op == SMTLIBParser::NODE_KIND::NT_EQ) {
+                    comparison_result = (left_value->getName() == right_value->getName());
+                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_LE &&
+                           left_value->isCInt() && right_value->isCInt()) {
+                    comparison_result = (left_value->toInt() <= right_value->toInt());
+                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_LT &&
+                           left_value->isCInt() && right_value->isCInt()) {
+                    comparison_result = (left_value->toInt() < right_value->toInt());
+                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_GE &&
+                           left_value->isCInt() && right_value->isCInt()) {
+                    comparison_result = (left_value->toInt() >= right_value->toInt());
+                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_GT &&
+                           left_value->isCInt() && right_value->isCInt()) {
+                    comparison_result = (left_value->toInt() > right_value->toInt());
+                }
+            }
+            
+            variable_values[result->getName()] = comparison_result ? parser->mkTrue() : parser->mkFalse();
+        }
+        
+        return result;
+    }
     
     if (random_val < 0.3 && !variables.empty()) {
         // 从现有变量中选择一个合适类型的变量
@@ -472,6 +543,48 @@ void Generator::collectVariables(const std::shared_ptr<SMTLIBParser::DAGNode>& n
     }
 }
 
+// 生成模型文件
+void Generator::generateModelFile(const std::string& model_path) {
+    std::ofstream outfile(model_path);
+    if (!outfile.is_open()) {
+        std::cerr << "Error: Unable to open model file: " << model_path << std::endl;
+        return;
+    }
+    
+    // 创建模型
+    SMTLIBParser::Model model;
+    
+    // 添加变量赋值到模型
+    for (const auto& var : variables) {
+        std::string var_name = var->getName();
+        
+        if (variable_values.find(var_name) != variable_values.end()) {
+            auto value = variable_values[var_name];
+            
+            if (var->getSort()->isInt()) {
+                // 整数变量
+                if (value->isCInt()) {
+                    model.setVarValue(var_name, value->toInt());
+                }
+            } else if (var->getSort()->isReal()) {
+                // 实数变量
+                if (value->isCReal()) {
+                    model.setVarValue(var_name, value->toReal());
+                }
+            } else if (var->getSort()->isBool()) {
+                // 布尔变量
+                model.setVarValue(var_name, value->isTrue());
+            }
+        }
+    }
+    
+    // 输出模型到文件
+    outfile << parser->printModel(model);
+    outfile.close();
+    
+    std::cout << "Model file generated: " << model_path << std::endl;
+}
+
 // 生成SMTLIB2文件
 void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars, int num_constraints) {
     // 清空现有数据
@@ -563,6 +676,12 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     outfile << "(exit)\n";
     
     outfile.close();
+    
+    // 生成模型文件
+    std::filesystem::path output_file_path(output_path);
+    std::string model_path = output_file_path.parent_path().string() + "/" +
+                           output_file_path.stem().string() + ".model";
+    generateModelFile(model_path);
 }
 
 } // namespace SMTLIBGenerator

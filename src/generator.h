@@ -28,6 +28,8 @@ private:
     std::set<SMTLIBParser::NODE_KIND> available_operators;
     // 下一个变量ID
     int next_var_id = 0;
+    // 布尔变量生成概率
+    double bool_var_probability = 0.2;
 
     // 随机生成一个变量或常量
     std::shared_ptr<SMTLIBParser::DAGNode> generateVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort);
@@ -43,6 +45,9 @@ private:
     
     // 加载理论操作符
     void loadTheories();
+    
+    // 生成模型文件
+    void generateModelFile(const std::string& model_path);
 
 public:
     // 构造函数
@@ -56,6 +61,9 @@ public:
     
     // 加载特定理论
     void loadTheory(const std::string& theory_name);
+    
+    // 设置布尔变量生成概率 (0.0-1.0)
+    void setBoolVarProbability(double probability);
 };
 
 } // namespace SMTLIBGenerator
