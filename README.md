@@ -1,1 +1,1 @@
-# NTA-Generator
+# SMTLIBGenerator
