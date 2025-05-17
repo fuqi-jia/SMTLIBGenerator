@@ -31,7 +31,7 @@ std::set<SMTLIBParser::NODE_KIND> getNTAOperators() {
         SMTLIBParser::NODE_KIND::NT_LOG,
         SMTLIBParser::NODE_KIND::NT_LN,
         SMTLIBParser::NODE_KIND::NT_LG,
-        SMTLIBParser::NODE_KIND::NT_LB
+        SMTLIBParser::NODE_KIND::NT_LB,
         // 三角函数
         SMTLIBParser::NODE_KIND::NT_SIN,
         SMTLIBParser::NODE_KIND::NT_COS,
@@ -53,6 +53,7 @@ std::set<SMTLIBParser::NODE_KIND> getNTAOperators() {
         SMTLIBParser::NODE_KIND::NT_ATANH,
         SMTLIBParser::NODE_KIND::NT_ACOTH,
         SMTLIBParser::NODE_KIND::NT_ASECH,
+        SMTLIBParser::NODE_KIND::NT_ACSCH
     };
     
     return operators;

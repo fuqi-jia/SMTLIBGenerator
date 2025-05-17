@@ -32,6 +32,13 @@ private:
     int next_var_id = 0;
     // 布尔变量生成概率
     double bool_var_probability = 0.2;
+    
+    // 整数变量取值范围
+    int int_min_value = -100;
+    int int_max_value = 100;
+    // 实数变量取值范围
+    double real_min_value = -100.0;
+    double real_max_value = 100.0;
 
     // 随机生成一个变量或常量
     std::shared_ptr<SMTLIBParser::DAGNode> generateVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort);
@@ -75,6 +82,12 @@ public:
     
     // 设置布尔变量生成概率 (0.0-1.0)
     void setBoolVarProbability(double probability);
+    
+    // 设置整数变量的取值范围
+    void setIntRange(int min_value, int max_value);
+    
+    // 设置实数变量的取值范围
+    void setRealRange(double min_value, double max_value);
 };
 
 } // namespace SMTLIBGenerator

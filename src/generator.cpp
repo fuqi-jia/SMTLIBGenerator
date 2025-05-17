@@ -29,13 +29,47 @@ void Generator::setBoolVarProbability(double probability) {
     bool_var_probability = std::max(0.0, std::min(1.0, probability));
 }
 
+// 设置整数变量的取值范围
+void Generator::setIntRange(int min_value, int max_value) {
+    // 确保最小值不大于最大值
+    if (min_value > max_value) {
+        std::swap(min_value, max_value);
+    }
+    int_min_value = min_value;
+    int_max_value = max_value;
+}
+
+// 设置实数变量的取值范围
+void Generator::setRealRange(double min_value, double max_value) {
+    // 确保最小值不大于最大值
+    if (min_value > max_value) {
+        std::swap(min_value, max_value);
+    }
+    real_min_value = min_value;
+    real_max_value = max_value;
+}
+
 // 设置逻辑类型
 void Generator::setLogic(const std::string& logic_name) {
-    logic = logic_name;
+    // 支持的逻辑类型
+    if (logic_name == "QF_LIA" || logic_name == "NTA" || logic_name == "QF_NTA") {
+        logic = logic_name;
+    } else {
+        std::cerr << "Warning: Unsupported logic: " << logic_name << ". Using QF_LIA instead." << std::endl;
+        logic = "QF_LIA";
+    }
+    
     // 清空现有的操作符
     available_operators.clear();
+    
     // 加载对应的理论
-    loadTheory(logic);
+    if (logic == "QF_LIA") {
+        loadTheory("QF_LIA");
+    } else if (logic == "NTA" || logic == "QF_NTA") {
+        loadTheory("NTA");
+    } else {
+        loadTheory("QF_LIA"); // 默认值
+    }
 }
 
 // 加载特定理论
@@ -161,7 +195,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
         // 生成一个随机值并保存
         if (sort->isInt()) {
             // 整数变量
-            std::uniform_int_distribution<int> int_dist(-100, 100);
+            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
             int value = int_dist(rng);
             auto value_node = parser->mkConstInt(value);
             
@@ -172,7 +206,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
             variables.push_back(result);
         } else if (sort->isReal()) {
             // 实数变量
-            std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
+            std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
             double value = real_dist(rng);
             
             // 将浮点数转换为分数形式
@@ -211,12 +245,12 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
         // 创建一个常量
         if (sort->isInt()) {
             // 整数常量
-            std::uniform_int_distribution<int> int_dist(-100, 100);
+            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
             int value = int_dist(rng);
             result = parser->mkConstInt(value);
         } else if (sort->isReal()) {
             // 实数常量
-            std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
+            std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
             double value = real_dist(rng);
             
             // 将浮点数转换为分数形式
@@ -233,7 +267,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
             result = parser->mkVar(sort, var_name);
             
             // 保存默认值
-            std::uniform_int_distribution<int> int_dist(-100, 100);
+            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
             int value = int_dist(rng);
             auto value_node = parser->mkConstInt(value);
             
@@ -268,12 +302,12 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateExpression(int depth, 
         // 如果没有可用的变量，则创建一个常量
         if (sort->isInt()) {
             // 整数常量
-            std::uniform_int_distribution<int> int_dist(-100, 100);
+            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
             int value = int_dist(rng);
             return parser->mkConstInt(value);
         } else if (sort->isReal()) {
             // 实数常量
-            std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
+            std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
             double value = real_dist(rng);
             return parser->mkConstReal(value);
         } else if (sort->isBool()) {
@@ -284,7 +318,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateExpression(int depth, 
         }
         
         // 未知类型，返回一个整数常量
-        std::uniform_int_distribution<int> int_dist(-100, 100);
+        std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
         int value = int_dist(rng);
         return parser->mkConstInt(value);
     }
@@ -343,14 +377,24 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateExpression(int depth, 
         }
     }
     
-    // 如果没有兼容的操作符，则创建变量或常量
-    if (compatible_operators.empty()) {
-        return generateVariable(sort);
+    // 从可用操作符中随机选择
+    std::vector<SMTLIBParser::NODE_KIND> available_ops;
+    for (const auto& op : compatible_operators) {
+        // 只有在操作符可用的情况下才添加
+        if (available_operators.find(op) != available_operators.end()) {
+            available_ops.push_back(op);
+        }
+    }
+    
+    // 如果没有可用的操作符，返回变量或常量
+    if (available_ops.empty()) {
+        std::cout << "Warning: No available operators for the selected sort. Defaulting to variable or constant." << std::endl;
+        return generateArithmeticExpression(0, sort);
     }
     
     // 随机选择一个操作符
-    std::uniform_int_distribution<size_t> op_dist(0, compatible_operators.size() - 1);
-    SMTLIBParser::NODE_KIND selected_op = compatible_operators[op_dist(rng)];
+    std::uniform_int_distribution<size_t> op_dist(0, available_ops.size() - 1);
+    SMTLIBParser::NODE_KIND selected_op = available_ops[op_dist(rng)];
     
     // 根据选择的操作符创建表达式
     std::shared_ptr<SMTLIBParser::DAGNode> result;
@@ -510,7 +554,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateRelationalConstraint(i
         
         if (compatible_vars.empty()) {
             // 如果没有找到兼容的变量，生成常量
-            std::uniform_int_distribution<int> val_dist(-100, 100);
+            std::uniform_int_distribution<int> val_dist(int_min_value, int_max_value);
             left = parser->mkConstInt(val_dist(rng));
             right = parser->mkConstInt(val_dist(rng));
         } else {
@@ -523,7 +567,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateRelationalConstraint(i
                 right = compatible_vars[var_dist(rng)];
             } else {
                 // 生成一个随机常量
-                std::uniform_int_distribution<int> val_dist(-100, 100);
+                std::uniform_int_distribution<int> val_dist(int_min_value, int_max_value);
                 right = parser->mkConstInt(val_dist(rng));
             }
         }
@@ -604,86 +648,199 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
         
         // 如果没有兼容的变量，生成一个常量
         if (sort->isInt()) {
-            std::uniform_int_distribution<int> val_dist(-100, 100);
+            std::uniform_int_distribution<int> val_dist(int_min_value, int_max_value);
             return parser->mkConstInt(val_dist(rng));
         } else if (sort->isReal()) {
-            std::uniform_real_distribution<double> val_dist(-100.0, 100.0);
+            std::uniform_real_distribution<double> val_dist(real_min_value, real_max_value);
             return parser->mkConstReal(val_dist(rng));
         } else {
             // 默认返回整数
-            std::uniform_int_distribution<int> val_dist(-100, 100);
+            std::uniform_int_distribution<int> val_dist(int_min_value, int_max_value);
             return parser->mkConstInt(val_dist(rng));
         }
     }
     
     // 选择算术操作符
-    std::vector<int> operator_types;
+    std::vector<SMTLIBParser::NODE_KIND> compatible_operators;
+    
+    // 检查是否支持NTA (非线性超越函数算术)
+    bool supports_nta = (logic == "NTA" || logic == "QF_NTA");
+    
     if (sort->isInt()) {
-        operator_types = {0, 1, 2, 3, 4}; // 0: +, 1: -, 2: *, 3: div, 4: mod
+        // 整数操作符
+        compatible_operators = {
+            SMTLIBParser::NODE_KIND::NT_ADD,
+            SMTLIBParser::NODE_KIND::NT_SUB,
+            SMTLIBParser::NODE_KIND::NT_MUL,
+            SMTLIBParser::NODE_KIND::NT_DIV_INT,
+            SMTLIBParser::NODE_KIND::NT_MOD
+        };
     } else if (sort->isReal()) {
-        operator_types = {0, 1, 2, 3}; // 0: +, 1: -, 2: *, 3: /
+        // 实数基本操作符
+        compatible_operators = {
+            SMTLIBParser::NODE_KIND::NT_ADD,
+            SMTLIBParser::NODE_KIND::NT_SUB,
+            SMTLIBParser::NODE_KIND::NT_MUL,
+            SMTLIBParser::NODE_KIND::NT_DIV_REAL
+        };
+        
+        // 如果支持NTA，添加超越函数操作符
+        if (supports_nta) {
+            std::vector<SMTLIBParser::NODE_KIND> transcendental_ops = {
+                SMTLIBParser::NODE_KIND::NT_SQRT,
+                SMTLIBParser::NODE_KIND::NT_EXP,
+                SMTLIBParser::NODE_KIND::NT_LOG,
+                SMTLIBParser::NODE_KIND::NT_LN,
+                SMTLIBParser::NODE_KIND::NT_SIN,
+                SMTLIBParser::NODE_KIND::NT_COS,
+                SMTLIBParser::NODE_KIND::NT_TAN,
+                SMTLIBParser::NODE_KIND::NT_POW,
+                SMTLIBParser::NODE_KIND::NT_ASIN,
+                SMTLIBParser::NODE_KIND::NT_ACOS,
+                SMTLIBParser::NODE_KIND::NT_ATAN
+            };
+            
+            compatible_operators.insert(compatible_operators.end(), 
+                                       transcendental_ops.begin(), 
+                                       transcendental_ops.end());
+        }
     } else {
-        operator_types = {0, 1}; // 默认只用 + 和 -
+        // 默认操作符
+        compatible_operators = {
+            SMTLIBParser::NODE_KIND::NT_ADD,
+            SMTLIBParser::NODE_KIND::NT_SUB
+        };
     }
     
-    std::uniform_int_distribution<size_t> op_dist(0, operator_types.size() - 1);
-    int op_type = operator_types[op_dist(rng)];
-    
-    if (op_type == 0) {
-        // + 操作符
-        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
-        int num_children = std::uniform_int_distribution<int>(2, 3)(rng);
-        for (int i = 0; i < num_children; ++i) {
-            children.push_back(generateArithmeticExpression(depth - 1, sort));
+    // 从可用操作符中随机选择
+    std::vector<SMTLIBParser::NODE_KIND> available_ops;
+    for (const auto& op : compatible_operators) {
+        // 只有在操作符可用的情况下才添加
+        if (available_operators.find(op) != available_operators.end()) {
+            available_ops.push_back(op);
         }
-        return parser->mkAdd(children);
-    } else if (op_type == 1) {
-        // - 操作符
+    }
+    
+    // 如果没有可用的操作符，返回变量或常量
+    if (available_ops.empty()) {
+        std::cout << "Warning: No available operators for the selected sort. Defaulting to variable or constant." << std::endl;
+        return generateArithmeticExpression(0, sort);
+    }
+    
+    // 随机选择一个操作符
+    std::uniform_int_distribution<size_t> op_dist(0, available_ops.size() - 1);
+    SMTLIBParser::NODE_KIND selected_op = available_ops[op_dist(rng)];
+    
+    // 创建表达式
+    std::shared_ptr<SMTLIBParser::DAGNode> result;
+    
+    // 检查操作符需要的参数数量
+    size_t param_count = 0;
+    bool is_unary = false;
+    bool is_binary = false;
+    
+    // 单目操作符
+    if (selected_op == SMTLIBParser::NODE_KIND::NT_NEG ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_SQRT ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_EXP ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_LOG ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_LN ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_SIN ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_COS ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_TAN ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_ASIN ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_ACOS ||
+        selected_op == SMTLIBParser::NODE_KIND::NT_ATAN) {
+        is_unary = true;
+        param_count = 1;
+    }
+    // 二目操作符
+    else if (selected_op == SMTLIBParser::NODE_KIND::NT_DIV_INT ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_DIV_REAL ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_MOD ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_POW) {
+        is_binary = true;
+        param_count = 2;
+    }
+    // 可变参数操作符
+    else if (selected_op == SMTLIBParser::NODE_KIND::NT_ADD ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_MUL) {
+        param_count = std::uniform_int_distribution<size_t>(2, 3)(rng);
+    }
+    // SUB默认为二目操作符
+    else if (selected_op == SMTLIBParser::NODE_KIND::NT_SUB) {
+        param_count = 2;
+    }
+    // 默认参数数量
+    else {
+        param_count = 2;
+    }
+    
+    // 根据参数数量生成子表达式
+    if (is_unary) {
+        auto child = generateArithmeticExpression(depth - 1, sort);
+        
+        // 针对一些特殊函数检查参数约束
+        if ((selected_op == SMTLIBParser::NODE_KIND::NT_SQRT ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_LOG ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_LN ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_ASIN ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_ACOS) && 
+            depth > 1) {
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            if (child->isConst() && child->getName()[0] == '-') {
+                // 如果是负常量，转换为正数
+                if (sort->isInt()) {
+                    std::uniform_int_distribution<int> val_dist(1, 10);
+                    child = parser->mkConstInt(val_dist(rng));
+                } else {
+                    std::uniform_real_distribution<double> val_dist(0.1, 10.0);
+                    child = parser->mkConstReal(val_dist(rng));
+                }
+            }
+        }
+        
+        result = parser->mkOper(sort, selected_op, child);
+    } else if (is_binary) {
         auto left = generateArithmeticExpression(depth - 1, sort);
         auto right = generateArithmeticExpression(depth - 1, sort);
-        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children = {left, right};
-        return parser->mkSub(children);
-    } else if (op_type == 2) {
-        // * 操作符
+        
+        // 处理除法和取模操作符，确保除数不为0
+        if ((selected_op == SMTLIBParser::NODE_KIND::NT_DIV_INT ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_DIV_REAL ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_MOD) && 
+            right->isConst() && right->getName() == "0") {
+            // 如果除数是0，替换为非0值
+            if (sort->isInt()) {
+                std::uniform_int_distribution<int> val_dist(1, 10);
+                right = parser->mkConstInt(val_dist(rng));
+            } else {
+                std::uniform_real_distribution<double> val_dist(0.1, 10.0);
+                right = parser->mkConstReal(val_dist(rng));
+            }
+        }
+        
+        result = parser->mkOper(sort, selected_op, left, right);
+    } else {
+        // 处理可变参数操作符
         std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
-        int num_children = std::uniform_int_distribution<int>(2, 2)(rng); // 限制乘法操作数为2个
-        for (int i = 0; i < num_children; ++i) {
+        for (size_t i = 0; i < param_count; ++i) {
             children.push_back(generateArithmeticExpression(depth - 1, sort));
         }
-        return parser->mkMul(children);
-    } else if (op_type == 3) {
-        // div 操作符
-        auto left = generateArithmeticExpression(depth - 1, sort);
         
-        // 确保除数不为0
-        std::shared_ptr<SMTLIBParser::DAGNode> right;
-        do {
-            right = generateArithmeticExpression(depth - 1, sort);
-        } while (right->isConst() && right->getName() == "0");
-        
-        if (sort->isInt()) {
-            return parser->mkDivInt(left, right);
+        if (selected_op == SMTLIBParser::NODE_KIND::NT_ADD) {
+            result = parser->mkAdd(children);
+        } else if (selected_op == SMTLIBParser::NODE_KIND::NT_MUL) {
+            result = parser->mkMul(children);
+        } else if (selected_op == SMTLIBParser::NODE_KIND::NT_SUB) {
+            result = parser->mkSub(children);
         } else {
-            return parser->mkDivReal(left, right);
+            // 默认情况下使用通用操作符构造函数
+            result = parser->mkOper(sort, selected_op, children);
         }
-    } else if (op_type == 4 && sort->isInt()) {
-        // mod 操作符 (只对整数有效)
-        auto left = generateArithmeticExpression(depth - 1, sort);
-        
-        // 确保除数不为0
-        std::shared_ptr<SMTLIBParser::DAGNode> right;
-        do {
-            right = generateArithmeticExpression(depth - 1, sort);
-        } while (right->isConst() && right->getName() == "0");
-        
-        return parser->mkMod(left, right);
-    } else {
-        // 默认返回加法
-        auto left = generateArithmeticExpression(depth - 1, sort);
-        auto right = generateArithmeticExpression(depth - 1, sort);
-        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children = {left, right};
-        return parser->mkAdd(children);
     }
+    
+    return result;
 }
 
 // 收集表达式中的所有变量并添加到variables列表中
@@ -713,14 +870,14 @@ void Generator::collectVariables(const std::shared_ptr<SMTLIBParser::DAGNode>& n
             // 如果变量没有对应的值，生成一个随机值
             if (variable_values.find(node->getName()) == variable_values.end()) {
                 if (node->getSort()->isInt()) {
-                    std::uniform_int_distribution<int> int_dist(-100, 100);
+                    std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
                     int value = int_dist(rng);
                     auto value_node = parser->mkConstInt(value);
                     variable_values[node->getName()] = value_node;
                     // 添加到模型中
                     model.add(node->getName(), value_node);
                 } else if (node->getSort()->isReal()) {
-                    std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
+                    std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
                     double value = real_dist(rng);
                     auto value_node = parser->mkConstReal(value);
                     variable_values[node->getName()] = value_node;
@@ -806,7 +963,7 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     std::shared_ptr<SMTLIBParser::Sort> var_sort;
     if (logic == "QF_LIA") {
         var_sort = SMTLIBParser::INT_SORT;
-    } else if (logic == "NTA") {
+    } else if (logic == "QF_NTA") {
         var_sort = SMTLIBParser::REAL_SORT;
     } else {
         // 默认使用整数类型
@@ -821,14 +978,14 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
         
         // 生成随机值
         if (var_sort->isInt()) {
-            std::uniform_int_distribution<int> int_dist(-100, 100);
+            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
             int value = int_dist(rng);
             auto value_node = parser->mkConstInt(value);
             variable_values[var_name] = value_node;
             // 添加到模型中
             model.add(var, value_node);
         } else if (var_sort->isReal()) {
-            std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
+            std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
             double value = real_dist(rng);
             auto value_node = parser->mkConstReal(value);
             variable_values[var_name] = value_node;
