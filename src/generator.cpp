@@ -350,7 +350,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
             }
             else if (child_value < -1 || child_value > 1) {
                 // 如果参数不在范围内，添加加法防止超出范围
-                child = parser->mkDivReal(parser->mkConstReal(1), child);
+                child = parser->mkDiv(parser->mkConstReal(1), child);
             }
         }
         
