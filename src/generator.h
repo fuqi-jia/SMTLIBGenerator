@@ -43,7 +43,7 @@ private:
     int constraint_depth = 4;
 
     // 随机生成一个变量或常量
-    std::shared_ptr<SMTLIBParser::DAGNode> generateVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort);
+    std::shared_ptr<SMTLIBParser::DAGNode> selectVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort);
     
     // 随机生成一个表达式节点
     std::shared_ptr<SMTLIBParser::DAGNode> generateExpression(int depth, const std::shared_ptr<SMTLIBParser::Sort>& sort);

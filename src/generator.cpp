@@ -1,5 +1,5 @@
 #include "generator.h"
-#include "theories/NTA.h"
+#include "theories/QF_NTA.h"
 #include "theories/QF_LIA.h"
 #include <fstream>
 #include <iostream>
@@ -58,7 +58,7 @@ void Generator::setConstraintDepth(int depth) {
 // 设置逻辑类型
 void Generator::setLogic(const std::string& logic_name) {
     // 支持的逻辑类型
-    if (logic_name == "QF_LIA" || logic_name == "NTA" || logic_name == "QF_NTA") {
+    if (logic_name == "QF_LIA" || logic_name == "QF_NTA") {
         logic = logic_name;
     } else {
         std::cerr << "Warning: Unsupported logic: " << logic_name << ". Using QF_LIA instead." << std::endl;
@@ -71,17 +71,17 @@ void Generator::setLogic(const std::string& logic_name) {
     // 加载对应的理论
     if (logic == "QF_LIA") {
         loadTheory("QF_LIA");
-    } else if (logic == "NTA" || logic == "QF_NTA") {
+    } else if (logic == "QF_NTA") {
         loadTheory("NTA");
     } else {
-        loadTheory("QF_LIA"); // 默认值
+        loadTheory("QF_LIA"); // A默认值
     }
 }
 
 // 加载特定理论
 void Generator::loadTheory(const std::string& theory_name) {
     if (theory_name == "QF_LIA") {
-        auto operators = getQF_LIAOperators();
+        auto operators = getLIAOperators();
         available_operators.insert(operators.begin(), operators.end());
     } else if (theory_name == "NTA") {
         auto operators = getNTAOperators();
@@ -96,7 +96,7 @@ void Generator::loadTheories() {
     // 根据当前设置的逻辑类型加载对应的理论
     if (logic == "QF_LIA") {
         loadTheory("QF_LIA");
-    } else if (logic == "NTA") {
+    } else if (logic == "QF_NTA") {
         loadTheory("NTA");
     } else {
         // 如果没有匹配的逻辑类型，默认加载QF_LIA
@@ -105,183 +105,21 @@ void Generator::loadTheories() {
 }
 
 // 随机生成一个变量或常量
-std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort) {
+std::shared_ptr<SMTLIBParser::DAGNode> Generator::selectVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort) {
+    assert(!variables.empty());
     std::shared_ptr<SMTLIBParser::DAGNode> result;
     
-    // 有一定概率创建新变量，否则使用现有变量或创建常量
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
-    double random_val = dist(rng);
-    
-    // 如果是布尔类型，且随机值大于布尔变量生成概率，则尝试生成非布尔类型
-    if (sort->isBool() && random_val > bool_var_probability) {
-        // 如果不是强制要求布尔类型，则根据逻辑类型生成整数或实数变量
-        std::shared_ptr<SMTLIBParser::Sort> non_bool_sort;
-        if (logic == "QF_LIA") {
-            non_bool_sort = SMTLIBParser::INT_SORT;
-        } else if (logic == "NTA") {
-            non_bool_sort = SMTLIBParser::REAL_SORT;
-        } else {
-            non_bool_sort = SMTLIBParser::INT_SORT;
-        }
-        
-        // 生成一个比较表达式，结果是布尔类型
-        auto left = generateVariable(non_bool_sort);
-        auto right = generateVariable(non_bool_sort);
-        
-        // 随机选择一个比较操作符
-        std::vector<SMTLIBParser::NODE_KIND> comparison_ops = {
-            SMTLIBParser::NODE_KIND::NT_EQ,
-            SMTLIBParser::NODE_KIND::NT_LE,
-            SMTLIBParser::NODE_KIND::NT_LT,
-            SMTLIBParser::NODE_KIND::NT_GE,
-            SMTLIBParser::NODE_KIND::NT_GT
-        };
-        
-        std::uniform_int_distribution<size_t> op_dist(0, comparison_ops.size() - 1);
-        SMTLIBParser::NODE_KIND selected_op = comparison_ops[op_dist(rng)];
-        
-        // 创建比较表达式
-        result = parser->mkOper(SMTLIBParser::BOOL_SORT, selected_op, left, right);
-        
-        // 计算表达式的值并保存
-        if (left->isVar() && right->isVar() && 
-            variable_values.count(left->getName()) && variable_values.count(right->getName())) {
-            auto left_value = variable_values[left->getName()];
-            auto right_value = variable_values[right->getName()];
-            
-            bool comparison_result = false;
-            
-            if (left_value->isConst() && right_value->isConst()) {
-                if (selected_op == SMTLIBParser::NODE_KIND::NT_EQ) {
-                    comparison_result = (left_value->getName() == right_value->getName());
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_LE &&
-                           left_value->isCInt() && right_value->isCInt()) {
-                    comparison_result = (parser->toInt(left_value) <= parser->toInt(right_value));
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_LT &&
-                           left_value->isCInt() && right_value->isCInt()) {
-                    comparison_result = (parser->toInt(left_value) < parser->toInt(right_value));
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_GE &&
-                           left_value->isCInt() && right_value->isCInt()) {
-                    comparison_result = (parser->toInt(left_value) >= parser->toInt(right_value));
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_GT &&
-                           left_value->isCInt() && right_value->isCInt()) {
-                    comparison_result = (parser->toInt(left_value) > parser->toInt(right_value));
-                }
-            }
-            
-            variable_values[result->getName()] = comparison_result ? parser->mkTrue() : parser->mkFalse();
-        }
-        
-        return result;
-    }
-    
-    if (random_val < 0.3 && !variables.empty()) {
-        // 从现有变量中选择一个合适类型的变量
-        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> compatible_vars;
-        for (const auto& var : variables) {
-            if (var->getSort()->isEqTo(sort)) {
-                compatible_vars.push_back(var);
-            }
-        }
-        
-        if (!compatible_vars.empty()) {
-            std::uniform_int_distribution<size_t> var_dist(0, compatible_vars.size() - 1);
-            result = compatible_vars[var_dist(rng)];
-            return result;
+    // 从现有变量中选择一个合适类型的变量
+    std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> compatible_vars;
+    for (const auto& var : variables) {
+        if (var->getSort()->isEqTo(sort)) {
+            compatible_vars.push_back(var);
         }
     }
     
-    if (random_val < 0.7 || variables.empty()) {
-        // 创建一个新变量
-        std::string var_name = "x" + std::to_string(next_var_id++);
-        
-        // 根据排序类型创建不同的变量
-        result = parser->mkVar(sort, var_name);
-        
-        // 生成一个随机值并保存
-        if (sort->isInt()) {
-            // 整数变量
-            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
-            int value = int_dist(rng);
-            auto value_node = parser->mkConstInt(value);
-            
-            // 保存变量和它的值
-            variable_values[var_name] = value_node;
-            // 添加到模型中
-            model.add(var_name, value_node);
-            variables.push_back(result);
-        } else if (sort->isReal()) {
-            // 实数变量
-            std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
-            double value = real_dist(rng);
-            
-            // 将浮点数转换为分数形式
-            auto value_node = parser->mkConstReal(value);
-            
-            // 保存变量和它的值
-            variable_values[var_name] = value_node;
-            // 添加到模型中
-            model.add(var_name, value_node);
-            variables.push_back(result);
-        } else if (sort->isBool()) {
-            // 布尔变量
-            std::uniform_int_distribution<int> bool_dist(0, 1);
-            bool value = bool_dist(rng) == 1;
-            
-            auto value_node = value ? parser->mkTrue() : parser->mkFalse();
-            
-            // 保存变量和它的值
-            variable_values[var_name] = value_node;
-            // 添加到模型中
-            model.add(var_name, value_node);
-            variables.push_back(result);
-        } else {
-            // 对于不支持的类型，创建默认变量
-            // 默认使用整数值
-            std::uniform_int_distribution<int> int_dist(-100, 100);
-            int value = int_dist(rng);
-            auto value_node = parser->mkConstInt(value);
-            
-            variable_values[var_name] = value_node;
-            // 添加到模型中
-            model.add(var_name, value_node);
-            variables.push_back(result);
-        }
-    } else {
-        // 创建一个常量
-        if (sort->isInt()) {
-            // 整数常量
-            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
-            int value = int_dist(rng);
-            result = parser->mkConstInt(value);
-        } else if (sort->isReal()) {
-            // 实数常量
-            std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
-            double value = real_dist(rng);
-            
-            // 将浮点数转换为分数形式
-            result = parser->mkConstReal(value);
-        } else if (sort->isBool()) {
-            // 布尔常量
-            std::uniform_int_distribution<int> bool_dist(0, 1);
-            bool value = bool_dist(rng) == 1;
-            
-            result = value ? parser->mkTrue() : parser->mkFalse();
-        } else {
-            // 对于不支持的类型，创建默认变量而不是常量
-            std::string var_name = "x" + std::to_string(next_var_id++);
-            result = parser->mkVar(sort, var_name);
-            
-            // 保存默认值
-            std::uniform_int_distribution<int> int_dist(int_min_value, int_max_value);
-            int value = int_dist(rng);
-            auto value_node = parser->mkConstInt(value);
-            
-            variable_values[var_name] = value_node;
-            // 添加到模型中
-            model.add(var_name, value_node);
-            variables.push_back(result);
-        }
+    if (!compatible_vars.empty()) {
+        std::uniform_int_distribution<size_t> var_dist(0, compatible_vars.size() - 1);
+        return compatible_vars[var_dist(rng)];
     }
     
     return result;
@@ -478,7 +316,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateExpression(int depth, 
         
         default:
             // 对于不支持的操作符，创建变量或常量
-            result = generateVariable(sort);
+            result = selectVariable(sort);
             break;
     }
     
@@ -533,7 +371,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateRelationalConstraint(i
     std::shared_ptr<SMTLIBParser::Sort> operand_sort;
     if (logic == "QF_LIA") {
         operand_sort = SMTLIBParser::INT_SORT;
-    } else if (logic == "NTA") {
+    } else if (logic == "QF_NTA") {
         operand_sort = SMTLIBParser::REAL_SORT;
     } else {
         // 默认使用整数类型
@@ -609,7 +447,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateBooleanConstraint(int 
     }
     
     // 选择布尔操作符
-    std::vector<int> operator_types = {0, 1, 2}; // 0: NOT, 1: AND, 2: OR
+    std::vector<int> operator_types = {0, 1, 2, 3}; // 0: NOT, 1: AND, 2: OR, 3: XOR, 4: IMPL, 5: IFF
     std::uniform_int_distribution<size_t> op_dist(0, operator_types.size() - 1);
     int op_type = operator_types[op_dist(rng)];
     
@@ -625,7 +463,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateBooleanConstraint(int 
             children.push_back(generateBooleanConstraint(depth - 1));
         }
         return parser->mkAnd(children);
-    } else {
+    } else if (op_type == 2) {
         // OR 操作符
         std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
         int num_children = std::uniform_int_distribution<int>(2, 3)(rng);
@@ -633,7 +471,22 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateBooleanConstraint(int 
             children.push_back(generateBooleanConstraint(depth - 1));
         }
         return parser->mkOr(children);
+    } else if (op_type == 3) {
+        // XOR 操作符
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
+        int num_children = std::uniform_int_distribution<int>(2, 3)(rng);
+        for (int i = 0; i < num_children; ++i) {
+            children.push_back(generateBooleanConstraint(depth - 1));
+        }
+        return parser->mkXor(children);
+    } else if (op_type == 4) {
+        // IMPL 操作符
+        auto left = generateBooleanConstraint(depth - 1);
+        auto right = generateBooleanConstraint(depth - 1);
+        return parser->mkImpl(left, right);
     }
+
+    return parser->mkTrue();
 }
 
 // 生成算术表达式
@@ -670,7 +523,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
     std::vector<SMTLIBParser::NODE_KIND> compatible_operators;
     
     // 检查是否支持NTA (非线性超越函数算术)
-    bool supports_nta = (logic == "NTA" || logic == "QF_NTA");
+    bool supports_nta = (logic == "QF_NTA");
     
     if (sort->isInt()) {
         // 整数操作符
@@ -696,14 +549,28 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
                 SMTLIBParser::NODE_KIND::NT_SQRT,
                 SMTLIBParser::NODE_KIND::NT_EXP,
                 SMTLIBParser::NODE_KIND::NT_LOG,
+                SMTLIBParser::NODE_KIND::NT_LG,
+                SMTLIBParser::NODE_KIND::NT_LB,
                 SMTLIBParser::NODE_KIND::NT_LN,
                 SMTLIBParser::NODE_KIND::NT_SIN,
                 SMTLIBParser::NODE_KIND::NT_COS,
                 SMTLIBParser::NODE_KIND::NT_TAN,
+                SMTLIBParser::NODE_KIND::NT_COT,
+                SMTLIBParser::NODE_KIND::NT_SEC,
+                SMTLIBParser::NODE_KIND::NT_CSC,
+                SMTLIBParser::NODE_KIND::NT_SINH,
+                SMTLIBParser::NODE_KIND::NT_COSH,
+                SMTLIBParser::NODE_KIND::NT_TANH,
                 SMTLIBParser::NODE_KIND::NT_POW,
+                SMTLIBParser::NODE_KIND::NT_POW2,
                 SMTLIBParser::NODE_KIND::NT_ASIN,
                 SMTLIBParser::NODE_KIND::NT_ACOS,
-                SMTLIBParser::NODE_KIND::NT_ATAN
+                SMTLIBParser::NODE_KIND::NT_ATAN,
+                SMTLIBParser::NODE_KIND::NT_ASINH,
+                SMTLIBParser::NODE_KIND::NT_ACOSH,
+                SMTLIBParser::NODE_KIND::NT_ATANH,
+                SMTLIBParser::NODE_KIND::NT_ACOTH,
+                SMTLIBParser::NODE_KIND::NT_ASECH,
             };
             
             compatible_operators.insert(compatible_operators.end(), 
@@ -714,7 +581,9 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
         // 默认操作符
         compatible_operators = {
             SMTLIBParser::NODE_KIND::NT_ADD,
-            SMTLIBParser::NODE_KIND::NT_SUB
+            SMTLIBParser::NODE_KIND::NT_SUB,
+            SMTLIBParser::NODE_KIND::NT_MUL,
+            SMTLIBParser::NODE_KIND::NT_DIV_INT,
         };
     }
     

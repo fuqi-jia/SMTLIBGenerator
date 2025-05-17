@@ -14,7 +14,7 @@ SMTLIBGenerator creates random satisfiable SMT formulas in SMT-LIB2 format. It w
 ## Supported Theories
 
 - QF_LIA: Quantifier-Free Linear Integer Arithmetic
-- QF_NTA: Quantifier-Free Non-linear Transcendental Arithmetic
+- QF_NTA: Quantifier-Free Non-linear Transcendental Arithmetic (includes trigonometric, hyperbolic, exponential and logarithmic functions)
 
 ## Requirements
 
