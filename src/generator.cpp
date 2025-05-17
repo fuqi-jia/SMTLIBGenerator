@@ -493,6 +493,12 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
                 // 如果指数为负数，替换为非负数
                 right = parser->mkNeg(right);
             }
+            else if(right_value == 0){
+                // 如果指数为0，替换为非0值
+                auto epsilon = generateConstant(sort);
+                auto epsilon_zero = parser->mkAdd(epsilon, parser->mkConstReal(1));
+                right = parser->mkAdd(right, epsilon_zero);
+            }
         }
         
         result = parser->mkOper(sort, selected_op, left, right);
