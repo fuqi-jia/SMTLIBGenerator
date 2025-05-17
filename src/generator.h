@@ -21,7 +21,7 @@ private:
     // SMTLIBParser
     std::shared_ptr<SMTLIBParser::Parser> parser;
     // 模型对象，用于存储变量值
-    SMTLIBParser::Model model;
+    std::shared_ptr<SMTLIBParser::Model> model;
     // 变量和值的映射，用于维护变量的赋值
     std::map<std::string, std::shared_ptr<SMTLIBParser::DAGNode>> variable_values;
     // 已创建的变量列表

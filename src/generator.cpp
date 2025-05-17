@@ -15,7 +15,7 @@ namespace SMTLIBGenerator {
 
 // 构造函数
 Generator::Generator(unsigned int seed, double decay_prob) 
-    : rng(seed), decay_probability(decay_prob), logic("QF_LIA"), model() {
+    : rng(seed), decay_probability(decay_prob), logic("QF_LIA"), model(std::make_shared<SMTLIBParser::Model>()) {
     // 初始化解析器
     parser = std::make_shared<SMTLIBParser::Parser>();
     
@@ -335,7 +335,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
              selected_op == SMTLIBParser::NODE_KIND::NT_ACOS) && 
             depth > 1) {
             // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
-            auto child_value = parser->evaluate(child, model)->toReal();
+            auto child_value = parser->toReal(parser->evaluate(child, model));
             if (child_value < 0) {
                 // 如果是负数，转化为正数
                 child = parser->mkNeg(child);
@@ -353,7 +353,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
         if ((selected_op == SMTLIBParser::NODE_KIND::NT_DIV_INT ||
              selected_op == SMTLIBParser::NODE_KIND::NT_DIV_REAL ||
              selected_op == SMTLIBParser::NODE_KIND::NT_MOD) && 
-             right_value->isZero()) {
+             parser->isZero(right_value)) {
             // 如果除数是0，替换为非0值
             right = parser->mkAdd(right, sort->isReal() ? parser->mkConstReal(1) : parser->mkConstInt(1));
         }
@@ -400,7 +400,7 @@ void Generator::generateModelFile(const std::string& model_path) {
     
     // 直接将模型输出到文件
     try {
-        outfile << model.toString();
+        outfile << model->toString();
         outfile.close();
         std::cout << "Model file generated: " << model_path << std::endl;
     } catch (const std::exception& e) {
@@ -415,7 +415,7 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     variable_values.clear();
     next_var_id = 0;
     // 清空模型
-    model = SMTLIBParser::Model();
+    model = SMTLIBParser::newModel();
     
     // 创建输出文件
     std::ofstream outfile(output_path);
@@ -470,21 +470,21 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
             auto value_node = parser->mkConstInt(value);
             variable_values[var_name] = value_node;
             // 添加到模型中
-            model.add(var, value_node);
+            model->add(var, value_node);
         } else if (var_sort->isReal()) {
             std::uniform_real_distribution<double> real_dist(real_min_value, real_max_value);
             double value = real_dist(rng);
             auto value_node = parser->mkConstReal(value);
             variable_values[var_name] = value_node;
             // 添加到模型中
-            model.add(var, value_node);
+            model->add(var, value_node);
         } else if (var_sort->isBool()) {
             std::uniform_int_distribution<int> bool_dist(0, 1);
             bool value = bool_dist(rng) == 1;
             auto value_node = value ? parser->mkTrue() : parser->mkFalse();
             variable_values[var_name] = value_node;
             // 添加到模型中
-            model.add(var, value_node);
+            model->add(var, value_node);
         }
         
         variables.push_back(var);
