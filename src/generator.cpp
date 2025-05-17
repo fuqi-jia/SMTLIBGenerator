@@ -328,17 +328,29 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
         auto child = generateArithmeticExpression(depth - 1, sort);
         
         // 针对一些特殊函数检查参数约束
-        if ((selected_op == SMTLIBParser::NODE_KIND::NT_SQRT ||
+        if (selected_op == SMTLIBParser::NODE_KIND::NT_SQRT ||
              selected_op == SMTLIBParser::NODE_KIND::NT_LOG ||
-             selected_op == SMTLIBParser::NODE_KIND::NT_LN ||
-             selected_op == SMTLIBParser::NODE_KIND::NT_ASIN ||
-             selected_op == SMTLIBParser::NODE_KIND::NT_ACOS) && 
-            depth > 1) {
+             selected_op == SMTLIBParser::NODE_KIND::NT_LN) {
             // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
             auto child_value = parser->toReal(parser->evaluate(child, model));
             if (child_value < 0) {
                 // 如果是负数，转化为正数
                 child = parser->mkNeg(child);
+            }
+        }
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_ASIN ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_ACOS ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_ATAN ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_ACOT) {
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            auto child_value = parser->toReal(parser->evaluate(child, model));
+            if(child_value == 0){
+                // 如果参数为0，添加加法防止0
+                child = parser->mkAdd(child, parser->mkConstReal(1));
+            }
+            else if (child_value < -1 || child_value > 1) {
+                // 如果参数不在范围内，添加加法防止超出范围
+                child = parser->mkDivReal(parser->mkConstReal(1), child);
             }
         }
         
