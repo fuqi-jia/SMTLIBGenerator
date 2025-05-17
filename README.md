@@ -60,6 +60,7 @@ SMTLIBGenerator <logic> <num_vars> <num_constraints> <output_path> [options]
 - `--int-max <value>` : Maximum value for integer variables (default: 100)
 - `--real-min <value>` : Minimum value for real variables (default: -100.0)
 - `--real-max <value>` : Maximum value for real variables (default: 100.0)
+- `--depth <value>` : Depth of constraint generation (affects complexity, default: 4)
 
 ### Examples:
 
@@ -86,6 +87,11 @@ Generating QF_NTA formulas with custom ranges:
 Multiple options can be combined in any order:
 ```bash
 ./SMTLIBGenerator QF_LIA 15 6 examples/example5.smt2 --bool-prob 0.1 --seed 54321 --int-min 0 --int-max 50
+```
+
+Generating more complex constraints by increasing depth:
+```bash
+./SMTLIBGenerator QF_LIA 10 5 examples/complex.smt2 --depth 6
 ```
 
 ## License

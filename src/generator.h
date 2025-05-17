@@ -39,6 +39,8 @@ private:
     // 实数变量取值范围
     double real_min_value = -100.0;
     double real_max_value = 100.0;
+    // 约束生成深度
+    int constraint_depth = 4;
 
     // 随机生成一个变量或常量
     std::shared_ptr<SMTLIBParser::DAGNode> generateVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort);
@@ -88,6 +90,9 @@ public:
     
     // 设置实数变量的取值范围
     void setRealRange(double min_value, double max_value);
+    
+    // 设置约束生成深度
+    void setConstraintDepth(int depth);
 };
 
 } // namespace SMTLIBGenerator

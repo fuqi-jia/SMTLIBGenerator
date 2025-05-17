@@ -49,6 +49,12 @@ void Generator::setRealRange(double min_value, double max_value) {
     real_max_value = max_value;
 }
 
+// 设置约束生成深度
+void Generator::setConstraintDepth(int depth) {
+    // 确保深度至少为1
+    constraint_depth = std::max(1, depth);
+}
+
 // 设置逻辑类型
 void Generator::setLogic(const std::string& logic_name) {
     // 支持的逻辑类型
@@ -960,18 +966,30 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     outfile << "(set-logic " << logic << ")\n\n";
     
     // 预先创建指定数量的变量
-    std::shared_ptr<SMTLIBParser::Sort> var_sort;
+    std::shared_ptr<SMTLIBParser::Sort> default_sort;
     if (logic == "QF_LIA") {
-        var_sort = SMTLIBParser::INT_SORT;
+        default_sort = SMTLIBParser::INT_SORT;
     } else if (logic == "QF_NTA") {
-        var_sort = SMTLIBParser::REAL_SORT;
+        default_sort = SMTLIBParser::REAL_SORT;
     } else {
         // 默认使用整数类型
-        var_sort = SMTLIBParser::INT_SORT;
+        default_sort = SMTLIBParser::INT_SORT;
     }
     
     // 确保生成的变量数量不超过指定的数量
     for (int i = 0; i < num_vars; ++i) {
+        // 决定变量类型
+        std::shared_ptr<SMTLIBParser::Sort> var_sort;
+        std::uniform_real_distribution<double> type_dist(0.0, 1.0);
+        double random_val = type_dist(rng);
+        
+        // 根据布尔变量生成概率决定是否生成布尔变量
+        if (random_val < bool_var_probability) {
+            var_sort = SMTLIBParser::BOOL_SORT;
+        } else {
+            var_sort = default_sort;
+        }
+        
         // 强制创建新变量，而不是复用已有变量或创建常量
         std::string var_name = "x" + std::to_string(next_var_id++);
         auto var = parser->mkVar(var_sort, var_name);
@@ -1008,7 +1026,7 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     for (int i = 0; i < num_constraints; ++i) {
         try {
             // 使用更高的深度生成更复杂的约束
-            auto constraint = generateConstraint(4); // 增加深度到4
+            auto constraint = generateConstraint(constraint_depth);
             
             // 确保不是简单的true/false约束
             if (constraint->isTrue() || constraint->isFalse()) {

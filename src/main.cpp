@@ -20,6 +20,7 @@ void printUsage() {
     std::cout << "  --int-max <value>    : Maximum value for integer variables (default: 100)" << std::endl;
     std::cout << "  --real-min <value>   : Minimum value for real variables (default: -100.0)" << std::endl;
     std::cout << "  --real-max <value>   : Maximum value for real variables (default: 100.0)" << std::endl;
+    std::cout << "  --depth <value>      : Depth of constraint generation (default: 4)" << std::endl;
 }
 
 // 解析命令行参数
@@ -131,6 +132,20 @@ int main(int argc, char* argv[]) {
         }
     }
     
+    // 设置约束生成深度
+    int constraint_depth = 4;  // 默认值
+    if (parseOption(argc, argv, "--depth", option_value)) {
+        try {
+            constraint_depth = std::stoi(option_value);
+            if (constraint_depth <= 0) {
+                std::cerr << "Warning: Constraint depth must be positive. Using default value." << std::endl;
+                constraint_depth = 4;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Warning: Invalid depth format. Using default value." << std::endl;
+        }
+    }
+    
     // 检查并创建输出目录
     std::filesystem::path output_file_path(output_path);
     auto parent_path = output_file_path.parent_path();
@@ -158,6 +173,10 @@ int main(int argc, char* argv[]) {
     
     std::cout << "Setting real variable range to: [" << real_min << ", " << real_max << "]" << std::endl;
     generator.setRealRange(real_min, real_max);
+    
+    // 设置约束生成深度
+    std::cout << "Setting constraint generation depth to: " << constraint_depth << std::endl;
+    generator.setConstraintDepth(constraint_depth);
     
     // 设置逻辑
     if (logic != "QF_LIA" && logic != "QF_NTA") {
