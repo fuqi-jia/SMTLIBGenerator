@@ -329,28 +329,133 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
         
         // 针对一些特殊函数检查参数约束
         if (selected_op == SMTLIBParser::NODE_KIND::NT_SQRT ||
-             selected_op == SMTLIBParser::NODE_KIND::NT_LOG ||
-             selected_op == SMTLIBParser::NODE_KIND::NT_LN) {
+             selected_op == SMTLIBParser::NODE_KIND::NT_LN || 
+             selected_op == SMTLIBParser::NODE_KIND::NT_LG ||
+             selected_op == SMTLIBParser::NODE_KIND::NT_LB) {
             // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
             auto child_value = parser->toReal(parser->evaluate(child, model));
-            if (child_value < 0) {
+            if (child_value < 0) { 
                 // 如果是负数，转化为正数
                 child = parser->mkNeg(child);
             }
         }
+        // | 函数                 | 定义域                               |
+        // | ------------------ | --------------------------------- |
+        // | $\sin x$           | $(-\infty, +\infty)$              | (ignore)
+        // | $\cos x$           | $(-\infty, +\infty)$              | (ignore)
+        // | $\tan x$           | $x \ne \frac{\pi}{2} + k\pi$      | (ignore)
+        // | $\cot x$           | $x \ne k\pi$                      | (ignore)
+        // | $\sec x$           | $x \ne \frac{\pi}{2} + k\pi$      | (ignore)
+        // | $\csc x$           | $x \ne k\pi$                      | (ignore)
+        // | $\arcsin x$        | $[-1, 1]$                         |
+        // | $\arccos x$        | $[-1, 1]$                         |
+        // | $\arctan x$        | $(-\infty, +\infty)$              | (ignore)
+        // | $\text{arccot}\,x$ | $(-\infty, +\infty)$              | (ignore)
+        // | $\text{arcsec}\,x$ | $(-\infty, -1] \cup [1, +\infty)$ | 
+        // | $\text{arccsc}\,x$ | $(-\infty, -1] \cup [1, +\infty)$ | 
+        // | $\sinh x$          | $(-\infty, +\infty)$              | (ignore)
+        // | $\cosh x$          | $(-\infty, +\infty)$              | (ignore)
+        // | $\tanh x$          | $(-\infty, +\infty)$              | (ignore)
+        // | $\coth x$          | $x \ne 0$                         | 
+        // | $\text{sech}\,x$   | $(-\infty, +\infty)$              | (ignore)
+        // | $\text{csch}\,x$   | $x \ne 0$                         |
+        // | $\text{asinh}\,x$  | $(-\infty, +\infty)$              | (ignore)
+        // | $\text{acosh}\,x$  | $[1, +\infty)$                    |
+        // | $\text{atanh}\,x$  | $(-1, 1)$                         |
+        // | $\text{acoth}\,x$  | $(-\infty, -1) \cup (1, +\infty)$ |
+        // | $\text{asech}\,x$  | $(0, 1]$                          |
+        // | $\text{acsch}\,x$  | $x \ne 0$                         |
+        // > 注：$k \in \mathbb{Z}$
+
+        //
+        // | $\arcsin x$        | $[-1, 1]$                         |
+        // | $\arccos x$        | $[-1, 1]$                         |
         else if(selected_op == SMTLIBParser::NODE_KIND::NT_ASIN ||
-                selected_op == SMTLIBParser::NODE_KIND::NT_ACOS ||
-                selected_op == SMTLIBParser::NODE_KIND::NT_ATAN ||
-                selected_op == SMTLIBParser::NODE_KIND::NT_ACOT) {
+                selected_op == SMTLIBParser::NODE_KIND::NT_ACOS) {
             // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
             auto child_value = parser->toReal(parser->evaluate(child, model));
-            if(child_value == 0){
-                // 如果参数为0，添加加法防止0
-                child = parser->mkAdd(child, parser->mkConstReal(1));
-            }
-            else if (child_value < -1 || child_value > 1) {
+            if (child_value < -1 || child_value > 1) {
                 // 如果参数不在范围内，添加加法防止超出范围
                 child = parser->mkDiv(parser->mkConstReal(1), child);
+            }
+        }
+        
+        // | $\text{arcsec}\,x$ | $(-\infty, -1] \cup [1, +\infty)$ | 
+        // | $\text{arccsc}\,x$ | $(-\infty, -1] \cup [1, +\infty)$ | 
+        // | $\text{acoth}\,x$  | $(-\infty, -1) \cup (1, +\infty)$ |
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_ASEC ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_ACSC ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_ACOTH) {
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            auto child_value = parser->toReal(parser->evaluate(child, model));
+            if (child_value > -1 && child_value < 1) {
+                // 如果参数不在范围内，添加加法防止超出范围
+                child = parser->mkDiv(parser->mkConstReal(1), child);
+            }
+        }
+        
+        // | $\coth x$          | $x \ne 0$                         | 
+        // | $\text{csch}\,x$   | $x \ne 0$                         |
+        // | $\text{acsch}\,x$  | $x \ne 0$                         |
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_COTH ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_CSCH ||
+                selected_op == SMTLIBParser::NODE_KIND::NT_ACSCH) {
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            auto child_value = parser->toReal(parser->evaluate(child, model));
+            if (child_value == 0) {
+                // 如果参数为0，添加加法防止0
+                auto epsilon = generateConstant(sort);
+                auto epsilon_zero = parser->mkAdd(epsilon, parser->mkConstReal(1));
+                child = parser->mkAdd(child, epsilon_zero);
+            }
+        }
+        
+        // | $\text{acosh}\,x$  | $[1, +\infty)$                    |
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_ACOSH){
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            auto child_value = parser->toReal(parser->evaluate(child, model));
+            if (child_value < 1) {
+                // 如果参数不在范围内，添加加法防止超出范围
+                if(child_value < -1){
+                    child = parser->mkNeg(child);
+                }
+                else{
+                    auto epsilon = generateConstant(sort);
+                    auto epsilon_two = parser->mkAdd(epsilon, parser->mkConstReal(2));
+                    child = parser->mkAdd(child, epsilon_two);
+                }
+            }
+        }
+        
+        // | $\text{atanh}\,x$  | $(-1, 1)$                         |
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_ATANH){
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            auto child_value = parser->toReal(parser->evaluate(child, model));
+            if (child_value <= -1 || child_value >= 1) {
+                // 如果参数不在范围内，添加加法防止超出范围
+                child = parser->mkDiv(parser->mkConstReal(1), child);
+                if(child_value == -1 || child_value == 1){
+                    child = parser->mkSin(child);
+                }
+                else{
+                    child = parser->mkDiv(parser->mkConstReal(1), child);
+                }
+            }
+        }
+        
+        // | $\text{asech}\,x$  | $(0, 1]$                          |
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_ASECH){
+            // 对于需要非负数/在特定范围内的参数的函数，可以添加加法防止负数
+            auto child_value = parser->toReal(parser->evaluate(child, model));
+            if (child_value <= 0 || child_value > 1) {
+                // 如果参数不在范围内，添加加法防止超出范围
+                child = parser->mkDiv(parser->mkConstReal(1), child);
+                if(child_value == 0){
+                    child = parser->mkAdd(child, parser->mkConstReal(1));
+                }
+                else{
+                    child = parser->mkDiv(parser->mkConstReal(1), child);
+                }
             }
         }
         
@@ -368,6 +473,26 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(i
              parser->isZero(right_value)) {
             // 如果除数是0，替换为非0值
             right = parser->mkAdd(right, sort->isReal() ? parser->mkConstReal(1) : parser->mkConstInt(1));
+        }
+        else if(selected_op == SMTLIBParser::NODE_KIND::NT_LOG){
+            // 如果底数为1，替换为非1值 或 如果底数为0，替换为非0值
+            if(parser->isOne(left)){
+                // 如果底数为1，替换为非1值
+                auto epsilon = generateConstant(sort);
+                auto epsilon_one = parser->mkAdd(epsilon, parser->mkConstReal(1));
+                left = parser->mkAdd(left, epsilon_one);
+            }
+            else if(parser->isZero(left)){
+                // 如果底数为0，替换为非0值
+                auto epsilon = generateConstant(sort);
+                auto epsilon_zero = parser->mkAdd(epsilon, parser->mkConstReal(2));
+                left = parser->mkAdd(left, epsilon_zero);
+            }
+
+            if(right_value < 0){
+                // 如果指数为负数，替换为非负数
+                right = parser->mkNeg(right);
+            }
         }
         
         result = parser->mkOper(sort, selected_op, left, right);
