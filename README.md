@@ -14,7 +14,7 @@ SMTLIBGenerator creates random satisfiable SMT formulas in SMT-LIB2 format. It w
 ## Supported Theories
 
 - QF_LIA: Quantifier-Free Linear Integer Arithmetic
-- NTA: Non-linear Transcendental Arithmetic
+- QF_NTA: Quantifier-Free Non-linear Transcendental Arithmetic
 
 ## Requirements
 
@@ -44,22 +44,49 @@ make install
 ## Usage
 
 ```
-SMTLIBGenerator <logic> <num_vars> <num_constraints> <output_path> [seed]
+SMTLIBGenerator <logic> <num_vars> <num_constraints> <output_path> [options]
 ```
 
-Parameters:
-- `logic`: The logic to use (QF_LIA or NTA)
+### Required Parameters:
+- `logic`: The logic to use (QF_LIA or QF_NTA)
 - `num_vars`: Number of variables to generate
 - `num_constraints`: Number of constraints to generate
 - `output_path`: Path to output SMT-LIB2 file
-- `seed` (optional): Random seed (default: current time)
 
-Example:
+### Options:
+- `--bool-prob <value>` : Probability of generating boolean variables (0.0-1.0, default: 0.2)
+- `--seed <value>` : Random seed (default: current time)
+- `--int-min <value>` : Minimum value for integer variables (default: -100)
+- `--int-max <value>` : Maximum value for integer variables (default: 100)
+- `--real-min <value>` : Minimum value for real variables (default: -100.0)
+- `--real-max <value>` : Maximum value for real variables (default: 100.0)
+
+### Examples:
+
+Basic usage:
 ```bash
 ./SMTLIBGenerator QF_LIA 10 5 examples/example1.smt2
 ```
 
-This will generate a satisfiable QF_LIA formula with 10 variables and 5 constraints, and save it to `examples/example1.smt2`.
+Setting a specific seed for reproducibility:
+```bash
+./SMTLIBGenerator QF_LIA 10 5 examples/example2.smt2 --seed 12345
+```
+
+Setting variable ranges:
+```bash
+./SMTLIBGenerator QF_LIA 10 5 examples/example3.smt2 --int-min 1 --int-max 100
+```
+
+Generating QF_NTA formulas with custom ranges:
+```bash
+./SMTLIBGenerator QF_NTA 8 4 examples/example4.smt2 --real-min -10.0 --real-max 10.0
+```
+
+Multiple options can be combined in any order:
+```bash
+./SMTLIBGenerator QF_LIA 15 6 examples/example5.smt2 --bool-prob 0.1 --seed 54321 --int-min 0 --int-max 50
+```
 
 ## License
 
