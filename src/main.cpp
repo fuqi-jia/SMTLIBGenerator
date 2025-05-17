@@ -109,8 +109,6 @@ int main(int argc, char* argv[]) {
     generator.generateSMTLIB2File(output_path, num_vars, num_constraints);
     
     std::cout << "Successfully generated SMTLIB2 file: " << output_path << std::endl;
-    std::cout << "Model file generated as: " << output_file_path.parent_path().string() + "/" 
-              << output_file_path.stem().string() + ".model" << std::endl;
     
     return 0;
 }
