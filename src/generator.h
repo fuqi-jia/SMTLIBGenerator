@@ -26,12 +26,18 @@ private:
     std::map<std::string, std::shared_ptr<SMTLIBParser::DAGNode>> variable_values;
     // 已创建的变量列表
     std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> variables;
-    // 可用的理论操作符
-    std::set<SMTLIBParser::NODE_KIND> available_operators;
     // 下一个变量ID
     int next_var_id = 0;
     // 布尔变量生成概率
     double bool_var_probability = 0.2;
+
+    // operators
+    std::shared_ptr<SMTLIBParser::Sort> default_var_sort;
+    std::set<SMTLIBParser::NODE_KIND> available_operators;
+    std::set<SMTLIBParser::NODE_KIND> bool_operators;
+    std::set<SMTLIBParser::NODE_KIND> comp_operators;
+    std::set<SMTLIBParser::NODE_KIND> term_operators;
+    std::set<SMTLIBParser::NODE_KIND> other_operators;
     
     // 整数变量取值范围
     int int_min_value = -100;
@@ -42,11 +48,14 @@ private:
     // 约束生成深度
     int constraint_depth = 4;
 
-    // 随机生成一个变量或常量
+
+    // 随机生成一个常量
+
+    std::shared_ptr<SMTLIBParser::DAGNode> generateConstant(const std::shared_ptr<SMTLIBParser::Sort>& sort);
+    std::shared_ptr<SMTLIBParser::DAGNode> generateConstant(const std::string& logic_name);
+
+    // 随机选择一个变量
     std::shared_ptr<SMTLIBParser::DAGNode> selectVariable(const std::shared_ptr<SMTLIBParser::Sort>& sort);
-    
-    // 随机生成一个表达式节点
-    std::shared_ptr<SMTLIBParser::DAGNode> generateExpression(int depth, const std::shared_ptr<SMTLIBParser::Sort>& sort);
     
     // 随机生成一个约束
     std::shared_ptr<SMTLIBParser::DAGNode> generateConstraint(int depth);
@@ -59,12 +68,6 @@ private:
     
     // 生成算术表达式
     std::shared_ptr<SMTLIBParser::DAGNode> generateArithmeticExpression(int depth, const std::shared_ptr<SMTLIBParser::Sort>& sort);
-    
-    // 收集表达式中的所有变量并添加到变量列表
-    void collectVariables(const std::shared_ptr<SMTLIBParser::DAGNode>& node);
-    
-    // 加载理论操作符
-    void loadTheories();
     
     // 生成模型文件
     void generateModelFile(const std::string& model_path);

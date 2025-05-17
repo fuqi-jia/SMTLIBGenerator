@@ -7,16 +7,6 @@
 namespace SMTLIBGenerator {
 
 // Quantifier-Free Linear Integer Arithmetic (QF_LIA) theory
-std::set<SMTLIBParser::NODE_KIND> getLIAOperators() {
-    std::set<SMTLIBParser::NODE_KIND> operators;
-
-    operators.insert(getLIABoolOperators().begin(), getLIABoolOperators().end());
-    operators.insert(getLIACompOperators().begin(), getLIACompOperators().end());
-    operators.insert(getLIATermOperators().begin(), getLIATermOperators().end());
-    operators.insert(getLIAOtherOperators().begin(), getLIAOtherOperators().end());
-    
-    return operators;
-}
 
 std::set<SMTLIBParser::NODE_KIND> getLIABoolOperators() {
     std::set<SMTLIBParser::NODE_KIND> operators = {
@@ -24,8 +14,10 @@ std::set<SMTLIBParser::NODE_KIND> getLIABoolOperators() {
         SMTLIBParser::NODE_KIND::NT_OR,
         SMTLIBParser::NODE_KIND::NT_NOT,
         SMTLIBParser::NODE_KIND::NT_XOR,
-        SMTLIBParser::NODE_KIND::NT_IMPL
+        SMTLIBParser::NODE_KIND::NT_IMPLIES
     };
+    
+    return operators;
 }
 
 std::set<SMTLIBParser::NODE_KIND> getLIACompOperators() {
@@ -37,6 +29,8 @@ std::set<SMTLIBParser::NODE_KIND> getLIACompOperators() {
         SMTLIBParser::NODE_KIND::NT_GE,
         SMTLIBParser::NODE_KIND::NT_GT,
     };
+    
+    return operators;
 }
 
 std::set<SMTLIBParser::NODE_KIND> getLIATermOperators() {
@@ -51,6 +45,8 @@ std::set<SMTLIBParser::NODE_KIND> getLIATermOperators() {
         SMTLIBParser::NODE_KIND::NT_DIV_INT,
         SMTLIBParser::NODE_KIND::NT_MOD,
     };
+    
+    return operators;
 }
 
 std::set<SMTLIBParser::NODE_KIND> getLIAOtherOperators() {
@@ -58,8 +54,20 @@ std::set<SMTLIBParser::NODE_KIND> getLIAOtherOperators() {
         SMTLIBParser::NODE_KIND::NT_IS_INT,
         SMTLIBParser::NODE_KIND::NT_IS_DIVISIBLE
     };
+    
+    return operators;
 }
 
+std::set<SMTLIBParser::NODE_KIND> getLIAOperators() {
+    std::set<SMTLIBParser::NODE_KIND> operators;
+
+    operators.insert(getLIABoolOperators().begin(), getLIABoolOperators().end());
+    operators.insert(getLIACompOperators().begin(), getLIACompOperators().end());
+    operators.insert(getLIATermOperators().begin(), getLIATermOperators().end());
+    operators.insert(getLIAOtherOperators().begin(), getLIAOtherOperators().end());
+    
+    return operators;
+}
 } // namespace SMTLIBGenerator
 
 #endif // QF_LIA_H 

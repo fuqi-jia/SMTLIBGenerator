@@ -7,16 +7,6 @@
 namespace SMTLIBGenerator {
 
 // Quantifier-Free Non-linear Transcendental Arithmetic (QF_NTA) theory
-std::set<SMTLIBParser::NODE_KIND> getNTAOperators() {
-    std::set<SMTLIBParser::NODE_KIND> operators;
-
-    operators.insert(getNTABoolOperators().begin(), getNTABoolOperators().end());
-    operators.insert(getNTACompOperators().begin(), getNTACompOperators().end());
-    operators.insert(getNTATermOperators().begin(), getNTATermOperators().end());
-    operators.insert(getNTAOtherOperators().begin(), getNTAOtherOperators().end());
-    
-    return operators;
-}
 
 std::set<SMTLIBParser::NODE_KIND> getNTABoolOperators() {
     std::set<SMTLIBParser::NODE_KIND> operators = {
@@ -24,7 +14,7 @@ std::set<SMTLIBParser::NODE_KIND> getNTABoolOperators() {
         SMTLIBParser::NODE_KIND::NT_OR,
         SMTLIBParser::NODE_KIND::NT_NOT,
         SMTLIBParser::NODE_KIND::NT_XOR,
-        SMTLIBParser::NODE_KIND::NT_IMPL
+        SMTLIBParser::NODE_KIND::NT_IMPLIES
     };
     
     return operators;
@@ -55,7 +45,7 @@ std::set<SMTLIBParser::NODE_KIND> getNTATermOperators() {
         SMTLIBParser::NODE_KIND::NT_POW2,
         SMTLIBParser::NODE_KIND::NT_ABS,
         SMTLIBParser::NODE_KIND::NT_SQRT,
-        SMTLIBParser::NODE_KIND::NT_SAFE_SQRT,
+        SMTLIBParser::NODE_KIND::NT_SAFESQRT,
 
 
         // 超越函数
@@ -109,6 +99,17 @@ std::set<SMTLIBParser::NODE_KIND> getNTAOtherOperators() {
         SMTLIBParser::NODE_KIND::NT_TO_INT,
         SMTLIBParser::NODE_KIND::NT_TO_REAL
     };
+    
+    return operators;
+}
+
+std::set<SMTLIBParser::NODE_KIND> getNTAOperators() {
+    std::set<SMTLIBParser::NODE_KIND> operators;
+
+    operators.insert(getNTABoolOperators().begin(), getNTABoolOperators().end());
+    operators.insert(getNTACompOperators().begin(), getNTACompOperators().end());
+    operators.insert(getNTATermOperators().begin(), getNTATermOperators().end());
+    operators.insert(getNTAOtherOperators().begin(), getNTAOtherOperators().end());
     
     return operators;
 }
