@@ -20,6 +20,8 @@ private:
     std::string logic;
     // SMTLIBParser
     std::shared_ptr<SMTLIBParser::Parser> parser;
+    // 模型对象，用于存储变量值
+    SMTLIBParser::Model model;
     // 变量和值的映射，用于维护变量的赋值
     std::map<std::string, std::shared_ptr<SMTLIBParser::DAGNode>> variable_values;
     // 已创建的变量列表
@@ -39,6 +41,15 @@ private:
     
     // 随机生成一个约束
     std::shared_ptr<SMTLIBParser::DAGNode> generateConstraint(int depth);
+    
+    // 生成布尔表达式约束
+    std::shared_ptr<SMTLIBParser::DAGNode> generateBooleanConstraint(int depth);
+    
+    // 生成关系表达式约束
+    std::shared_ptr<SMTLIBParser::DAGNode> generateRelationalConstraint(int depth);
+    
+    // 生成算术表达式
+    std::shared_ptr<SMTLIBParser::DAGNode> generateArithmeticExpression(int depth, const std::shared_ptr<SMTLIBParser::Sort>& sort);
     
     // 收集表达式中的所有变量并添加到变量列表
     void collectVariables(const std::shared_ptr<SMTLIBParser::DAGNode>& node);

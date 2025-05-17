@@ -15,7 +15,7 @@ namespace SMTLIBGenerator {
 
 // 构造函数
 Generator::Generator(unsigned int seed, double decay_prob) 
-    : rng(seed), decay_probability(decay_prob), logic("QF_LIA") {
+    : rng(seed), decay_probability(decay_prob), logic("QF_LIA"), model() {
     // 初始化解析器
     parser = std::make_shared<SMTLIBParser::Parser>();
     
@@ -156,17 +156,19 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
         std::string var_name = "x" + std::to_string(next_var_id++);
         
         // 根据排序类型创建不同的变量
-        result = std::make_shared<SMTLIBParser::DAGNode>(sort, SMTLIBParser::NODE_KIND::NT_VAR, var_name);
+        result = parser->mkVar(sort, var_name);
         
         // 生成一个随机值并保存
         if (sort->isInt()) {
             // 整数变量
             std::uniform_int_distribution<int> int_dist(-100, 100);
             int value = int_dist(rng);
-            auto value_node = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+            auto value_node = parser->mkConstInt(value);
             
             // 保存变量和它的值
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var_name, value_node);
             variables.push_back(result);
         } else if (sort->isReal()) {
             // 实数变量
@@ -174,12 +176,12 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
             double value = real_dist(rng);
             
             // 将浮点数转换为分数形式
-            std::stringstream ss;
-            ss << value;
-            auto value_node = std::make_shared<SMTLIBParser::DAGNode>(ss.str());
+            auto value_node = parser->mkConstReal(value);
             
             // 保存变量和它的值
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var_name, value_node);
             variables.push_back(result);
         } else if (sort->isBool()) {
             // 布尔变量
@@ -190,15 +192,19 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
             
             // 保存变量和它的值
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var_name, value_node);
             variables.push_back(result);
         } else {
             // 对于不支持的类型，创建默认变量
             // 默认使用整数值
             std::uniform_int_distribution<int> int_dist(-100, 100);
             int value = int_dist(rng);
-            auto value_node = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+            auto value_node = parser->mkConstInt(value);
             
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var_name, value_node);
             variables.push_back(result);
         }
     } else {
@@ -207,16 +213,14 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
             // 整数常量
             std::uniform_int_distribution<int> int_dist(-100, 100);
             int value = int_dist(rng);
-            result = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+            result = parser->mkConstInt(value);
         } else if (sort->isReal()) {
             // 实数常量
             std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
             double value = real_dist(rng);
             
             // 将浮点数转换为分数形式
-            std::stringstream ss;
-            ss << value;
-            result = std::make_shared<SMTLIBParser::DAGNode>(ss.str());
+            result = parser->mkConstReal(value);
         } else if (sort->isBool()) {
             // 布尔常量
             std::uniform_int_distribution<int> bool_dist(0, 1);
@@ -226,14 +230,16 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateVariable(const std::sh
         } else {
             // 对于不支持的类型，创建默认变量而不是常量
             std::string var_name = "x" + std::to_string(next_var_id++);
-            result = std::make_shared<SMTLIBParser::DAGNode>(sort, SMTLIBParser::NODE_KIND::NT_VAR, var_name);
+            result = parser->mkVar(sort, var_name);
             
             // 保存默认值
             std::uniform_int_distribution<int> int_dist(-100, 100);
             int value = int_dist(rng);
-            auto value_node = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+            auto value_node = parser->mkConstInt(value);
             
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var_name, value_node);
             variables.push_back(result);
         }
     }
@@ -264,14 +270,12 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateExpression(int depth, 
             // 整数常量
             std::uniform_int_distribution<int> int_dist(-100, 100);
             int value = int_dist(rng);
-            return std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+            return parser->mkConstInt(value);
         } else if (sort->isReal()) {
             // 实数常量
             std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
             double value = real_dist(rng);
-            std::stringstream ss;
-            ss << value;
-            return std::make_shared<SMTLIBParser::DAGNode>(ss.str());
+            return parser->mkConstReal(value);
         } else if (sort->isBool()) {
             // 布尔常量
             std::uniform_int_distribution<int> bool_dist(0, 1);
@@ -282,7 +286,7 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateExpression(int depth, 
         // 未知类型，返回一个整数常量
         std::uniform_int_distribution<int> int_dist(-100, 100);
         int value = int_dist(rng);
-        return std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+        return parser->mkConstInt(value);
     }
     
     // 以下代码用于生成复杂表达式，需要确保只使用已存在的变量
@@ -436,118 +440,249 @@ std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateConstraint(int depth) 
     std::uniform_real_distribution<double> dist(0.0, 1.0);
     double random_val = dist(rng);
     
+    // 确保至少有一些变量可用
+    if (variables.empty()) {
+        // 如果没有变量，创建一个简单约束（应该不会发生，因为在generateSMTLIB2File中已经预先创建了变量）
+        return parser->mkTrue();
+    }
+    
     // 选择约束类型：布尔表达式或关系表达式
-    if (random_val < 0.3 && !variables.empty()) {
-        // 生成一个布尔表达式作为约束
-        return generateExpression(depth, SMTLIBParser::BOOL_SORT);
+    if (random_val < 0.3) {
+        // 生成复合布尔表达式作为约束
+        return generateBooleanConstraint(depth);
     } else {
-        // 生成一个关系表达式作为约束
-        std::vector<SMTLIBParser::NODE_KIND> comparison_ops;
-        
-        // 收集所有可用的比较运算符
-        for (const auto& op : available_operators) {
-            if (op == SMTLIBParser::NODE_KIND::NT_EQ ||
-                op == SMTLIBParser::NODE_KIND::NT_LE ||
-                op == SMTLIBParser::NODE_KIND::NT_LT ||
-                op == SMTLIBParser::NODE_KIND::NT_GE ||
-                op == SMTLIBParser::NODE_KIND::NT_GT) {
-                comparison_ops.push_back(op);
+        // 生成关系表达式作为约束
+        return generateRelationalConstraint(depth);
+    }
+}
+
+// 生成关系表达式约束
+std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateRelationalConstraint(int depth) {
+    // 收集所有可用的比较运算符
+    std::vector<SMTLIBParser::NODE_KIND> comparison_ops;
+    for (const auto& op : available_operators) {
+        if (op == SMTLIBParser::NODE_KIND::NT_EQ ||
+            op == SMTLIBParser::NODE_KIND::NT_LE ||
+            op == SMTLIBParser::NODE_KIND::NT_LT ||
+            op == SMTLIBParser::NODE_KIND::NT_GE ||
+            op == SMTLIBParser::NODE_KIND::NT_GT) {
+            comparison_ops.push_back(op);
+        }
+    }
+    
+    // 如果没有比较运算符，则使用等号
+    if (comparison_ops.empty()) {
+        comparison_ops.push_back(SMTLIBParser::NODE_KIND::NT_EQ);
+    }
+    
+    // 随机选择一个比较运算符
+    std::uniform_int_distribution<size_t> op_dist(0, comparison_ops.size() - 1);
+    SMTLIBParser::NODE_KIND selected_op = comparison_ops[op_dist(rng)];
+    
+    // 确定操作数的类型
+    std::shared_ptr<SMTLIBParser::Sort> operand_sort;
+    if (logic == "QF_LIA") {
+        operand_sort = SMTLIBParser::INT_SORT;
+    } else if (logic == "NTA") {
+        operand_sort = SMTLIBParser::REAL_SORT;
+    } else {
+        // 默认使用整数类型
+        operand_sort = SMTLIBParser::INT_SORT;
+    }
+    
+    // 随机决定是使用简单变量还是生成复杂表达式
+    std::uniform_real_distribution<double> expr_dist(0.0, 1.0);
+    double expr_choice = expr_dist(rng);
+    
+    std::shared_ptr<SMTLIBParser::DAGNode> left, right;
+    if (expr_choice < 0.6 && depth > 1) {
+        // 生成复杂表达式
+        left = generateArithmeticExpression(depth - 1, operand_sort);
+        right = generateArithmeticExpression(depth - 1, operand_sort);
+    } else {
+        // 选择变量
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> compatible_vars;
+        for (const auto& var : variables) {
+            if (var->getSort()->isEqTo(operand_sort)) {
+                compatible_vars.push_back(var);
             }
         }
         
-        // 如果没有比较运算符，则直接生成布尔表达式
-        if (comparison_ops.empty()) {
-            return generateExpression(depth, SMTLIBParser::BOOL_SORT);
-        }
-        
-        // 随机选择一个比较运算符
-        std::uniform_int_distribution<size_t> op_dist(0, comparison_ops.size() - 1);
-        SMTLIBParser::NODE_KIND selected_op = comparison_ops[op_dist(rng)];
-        
-        // 确定操作数的类型
-        std::shared_ptr<SMTLIBParser::Sort> operand_sort;
-        if (logic == "QF_LIA") {
-            operand_sort = SMTLIBParser::INT_SORT;
-        } else if (logic == "NTA") {
-            operand_sort = SMTLIBParser::REAL_SORT;
+        if (compatible_vars.empty()) {
+            // 如果没有找到兼容的变量，生成常量
+            std::uniform_int_distribution<int> val_dist(-100, 100);
+            left = parser->mkConstInt(val_dist(rng));
+            right = parser->mkConstInt(val_dist(rng));
         } else {
-            // 默认使用整数类型
-            operand_sort = SMTLIBParser::INT_SORT;
+            // 从兼容变量中随机选择
+            std::uniform_int_distribution<size_t> var_dist(0, compatible_vars.size() - 1);
+            left = compatible_vars[var_dist(rng)];
+            
+            // 50%的概率，右边是变量或常量
+            if (expr_dist(rng) < 0.5) {
+                right = compatible_vars[var_dist(rng)];
+            } else {
+                // 生成一个随机常量
+                std::uniform_int_distribution<int> val_dist(-100, 100);
+                right = parser->mkConstInt(val_dist(rng));
+            }
         }
-        
-        // 如果没有变量，创建一个常量表达式
-        if (variables.empty()) {
-            // 创建两个常量
-            std::uniform_int_distribution<int> int_dist(-100, 100);
-            int left_val = int_dist(rng);
-            int right_val = int_dist(rng);
-            
-            auto left = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(left_val));
-            auto right = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(right_val));
-            
-            // 创建比较表达式
-            return parser->mkOper(SMTLIBParser::BOOL_SORT, selected_op, left, right);
-        }
-        
-        // 从已有变量中随机选择两个，而不是生成新的表达式
-        std::uniform_int_distribution<size_t> var_dist(0, variables.size() - 1);
-        auto left = variables[var_dist(rng)];
-        auto right = variables[var_dist(rng)];
-        
-        // 创建比较表达式
-        auto result = parser->mkOper(SMTLIBParser::BOOL_SORT, selected_op, left, right);
-        
-        // 计算比较结果并存储
-        bool left_has_value = variable_values.find(left->getName()) != variable_values.end();
-        bool right_has_value = variable_values.find(right->getName()) != variable_values.end();
-        
-        if (left_has_value && right_has_value) {
-            auto left_value = variable_values[left->getName()];
-            auto right_value = variable_values[right->getName()];
-            
-            // 根据比较运算符计算结果
-            bool comparison_result = false;
-            
-            // 此处简化处理，实际应对不同类型的值进行更详细的计算
-            if (left_value->isConst() && right_value->isConst()) {
-                if (selected_op == SMTLIBParser::NODE_KIND::NT_EQ) {
-                    // 相等比较
-                    comparison_result = (left_value->getName() == right_value->getName());
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_LE) {
-                    // 小于等于比较
-                    if (left_value->isCInt() && right_value->isCInt()) {
-                        comparison_result = (parser->toInt(left_value) <= parser->toInt(right_value));
-                    } else if (left_value->isCReal() && right_value->isCReal()) {
-                        comparison_result = (parser->toReal(left_value) <= parser->toReal(right_value));
-                    }
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_LT) {
-                    // 小于比较
-                    if (left_value->isCInt() && right_value->isCInt()) {
-                        comparison_result = (parser->toInt(left_value) < parser->toInt(right_value));
-                    } else if (left_value->isCReal() && right_value->isCReal()) {
-                        comparison_result = (parser->toReal(left_value) < parser->toReal(right_value));
-                    }
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_GE) {
-                    // 大于等于比较
-                    if (left_value->isCInt() && right_value->isCInt()) {
-                        comparison_result = (parser->toInt(left_value) >= parser->toInt(right_value));
-                    } else if (left_value->isCReal() && right_value->isCReal()) {
-                        comparison_result = (parser->toReal(left_value) >= parser->toReal(right_value));
-                    }
-                } else if (selected_op == SMTLIBParser::NODE_KIND::NT_GT) {
-                    // 大于比较
-                    if (left_value->isCInt() && right_value->isCInt()) {
-                        comparison_result = (parser->toInt(left_value) > parser->toInt(right_value));
-                    } else if (left_value->isCReal() && right_value->isCReal()) {
-                        comparison_result = (parser->toReal(left_value) > parser->toReal(right_value));
-                    }
+    }
+    
+    // 创建比较表达式
+    auto result = parser->mkOper(SMTLIBParser::BOOL_SORT, selected_op, left, right);
+    
+    return result;
+}
+
+// 生成布尔表达式约束
+std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateBooleanConstraint(int depth) {
+    if (depth <= 0) {
+        // 如果深度为0，返回一个变量或常量
+        if (!variables.empty()) {
+            std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> bool_vars;
+            for (const auto& var : variables) {
+                if (var->getSort()->isBool()) {
+                    bool_vars.push_back(var);
                 }
             }
             
-            variable_values[result->getName()] = comparison_result ? parser->mkTrue() : parser->mkFalse();
+            if (!bool_vars.empty()) {
+                std::uniform_int_distribution<size_t> var_dist(0, bool_vars.size() - 1);
+                return bool_vars[var_dist(rng)];
+            }
         }
         
-        return result;
+        // 50%概率返回true或false
+        std::uniform_int_distribution<int> bool_dist(0, 1);
+        return bool_dist(rng) == 1 ? parser->mkTrue() : parser->mkFalse();
+    }
+    
+    // 选择布尔操作符
+    std::vector<int> operator_types = {0, 1, 2}; // 0: NOT, 1: AND, 2: OR
+    std::uniform_int_distribution<size_t> op_dist(0, operator_types.size() - 1);
+    int op_type = operator_types[op_dist(rng)];
+    
+    if (op_type == 0) {
+        // NOT 操作符
+        auto child = generateBooleanConstraint(depth - 1);
+        return parser->mkNot(child);
+    } else if (op_type == 1) {
+        // AND 操作符
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
+        int num_children = std::uniform_int_distribution<int>(2, 3)(rng);
+        for (int i = 0; i < num_children; ++i) {
+            children.push_back(generateBooleanConstraint(depth - 1));
+        }
+        return parser->mkAnd(children);
+    } else {
+        // OR 操作符
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
+        int num_children = std::uniform_int_distribution<int>(2, 3)(rng);
+        for (int i = 0; i < num_children; ++i) {
+            children.push_back(generateBooleanConstraint(depth - 1));
+        }
+        return parser->mkOr(children);
+    }
+}
+
+// 生成算术表达式
+std::shared_ptr<SMTLIBParser::DAGNode> Generator::generateArithmeticExpression(int depth, const std::shared_ptr<SMTLIBParser::Sort>& sort) {
+    if (depth <= 0) {
+        // 如果深度为0，返回一个变量或常量
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> compatible_vars;
+        for (const auto& var : variables) {
+            if (var->getSort()->isEqTo(sort)) {
+                compatible_vars.push_back(var);
+            }
+        }
+        
+        if (!compatible_vars.empty()) {
+            std::uniform_int_distribution<size_t> var_dist(0, compatible_vars.size() - 1);
+            return compatible_vars[var_dist(rng)];
+        }
+        
+        // 如果没有兼容的变量，生成一个常量
+        if (sort->isInt()) {
+            std::uniform_int_distribution<int> val_dist(-100, 100);
+            return parser->mkConstInt(val_dist(rng));
+        } else if (sort->isReal()) {
+            std::uniform_real_distribution<double> val_dist(-100.0, 100.0);
+            return parser->mkConstReal(val_dist(rng));
+        } else {
+            // 默认返回整数
+            std::uniform_int_distribution<int> val_dist(-100, 100);
+            return parser->mkConstInt(val_dist(rng));
+        }
+    }
+    
+    // 选择算术操作符
+    std::vector<int> operator_types;
+    if (sort->isInt()) {
+        operator_types = {0, 1, 2, 3, 4}; // 0: +, 1: -, 2: *, 3: div, 4: mod
+    } else if (sort->isReal()) {
+        operator_types = {0, 1, 2, 3}; // 0: +, 1: -, 2: *, 3: /
+    } else {
+        operator_types = {0, 1}; // 默认只用 + 和 -
+    }
+    
+    std::uniform_int_distribution<size_t> op_dist(0, operator_types.size() - 1);
+    int op_type = operator_types[op_dist(rng)];
+    
+    if (op_type == 0) {
+        // + 操作符
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
+        int num_children = std::uniform_int_distribution<int>(2, 3)(rng);
+        for (int i = 0; i < num_children; ++i) {
+            children.push_back(generateArithmeticExpression(depth - 1, sort));
+        }
+        return parser->mkAdd(children);
+    } else if (op_type == 1) {
+        // - 操作符
+        auto left = generateArithmeticExpression(depth - 1, sort);
+        auto right = generateArithmeticExpression(depth - 1, sort);
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children = {left, right};
+        return parser->mkSub(children);
+    } else if (op_type == 2) {
+        // * 操作符
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children;
+        int num_children = std::uniform_int_distribution<int>(2, 2)(rng); // 限制乘法操作数为2个
+        for (int i = 0; i < num_children; ++i) {
+            children.push_back(generateArithmeticExpression(depth - 1, sort));
+        }
+        return parser->mkMul(children);
+    } else if (op_type == 3) {
+        // div 操作符
+        auto left = generateArithmeticExpression(depth - 1, sort);
+        
+        // 确保除数不为0
+        std::shared_ptr<SMTLIBParser::DAGNode> right;
+        do {
+            right = generateArithmeticExpression(depth - 1, sort);
+        } while (right->isConst() && right->getName() == "0");
+        
+        if (sort->isInt()) {
+            return parser->mkDivInt(left, right);
+        } else {
+            return parser->mkDivReal(left, right);
+        }
+    } else if (op_type == 4 && sort->isInt()) {
+        // mod 操作符 (只对整数有效)
+        auto left = generateArithmeticExpression(depth - 1, sort);
+        
+        // 确保除数不为0
+        std::shared_ptr<SMTLIBParser::DAGNode> right;
+        do {
+            right = generateArithmeticExpression(depth - 1, sort);
+        } while (right->isConst() && right->getName() == "0");
+        
+        return parser->mkMod(left, right);
+    } else {
+        // 默认返回加法
+        auto left = generateArithmeticExpression(depth - 1, sort);
+        auto right = generateArithmeticExpression(depth - 1, sort);
+        std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children = {left, right};
+        return parser->mkAdd(children);
     }
 }
 
@@ -580,20 +715,24 @@ void Generator::collectVariables(const std::shared_ptr<SMTLIBParser::DAGNode>& n
                 if (node->getSort()->isInt()) {
                     std::uniform_int_distribution<int> int_dist(-100, 100);
                     int value = int_dist(rng);
-                    auto value_node = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+                    auto value_node = parser->mkConstInt(value);
                     variable_values[node->getName()] = value_node;
+                    // 添加到模型中
+                    model.add(node->getName(), value_node);
                 } else if (node->getSort()->isReal()) {
                     std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
                     double value = real_dist(rng);
-                    std::stringstream ss;
-                    ss << value;
-                    auto value_node = std::make_shared<SMTLIBParser::DAGNode>(ss.str());
+                    auto value_node = parser->mkConstReal(value);
                     variable_values[node->getName()] = value_node;
+                    // 添加到模型中
+                    model.add(node->getName(), value_node);
                 } else if (node->getSort()->isBool()) {
                     std::uniform_int_distribution<int> bool_dist(0, 1);
                     bool value = bool_dist(rng) == 1;
                     auto value_node = value ? parser->mkTrue() : parser->mkFalse();
                     variable_values[node->getName()] = value_node;
+                    // 添加到模型中
+                    model.add(node->getName(), value_node);
                 }
             }
         }
@@ -626,25 +765,7 @@ void Generator::generateModelFile(const std::string& model_path) {
         return;
     }
     
-    // 创建模型
-    SMTLIBParser::Model model;
-    
-    // 添加变量赋值到模型
-    for (const auto& var : variables) {
-        std::string var_name = var->getName();
-        
-        if (variable_values.find(var_name) != variable_values.end()) {
-            auto value = variable_values[var_name];
-            
-            try {
-                model.add(var_name, value);
-            } catch (const std::exception& e) {
-                std::cerr << "Warning: Failed to add variable " << var_name << " to model: " << e.what() << std::endl;
-            }
-        }
-    }
-    
-    // 输出模型到文件
+    // 直接将模型输出到文件
     try {
         outfile << model.toString();
         outfile.close();
@@ -660,6 +781,8 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     variables.clear();
     variable_values.clear();
     next_var_id = 0;
+    // 清空模型
+    model = SMTLIBParser::Model();
     
     // 创建输出文件
     std::ofstream outfile(output_path);
@@ -694,26 +817,30 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     for (int i = 0; i < num_vars; ++i) {
         // 强制创建新变量，而不是复用已有变量或创建常量
         std::string var_name = "x" + std::to_string(next_var_id++);
-        auto var = std::make_shared<SMTLIBParser::DAGNode>(var_sort, SMTLIBParser::NODE_KIND::NT_VAR, var_name);
+        auto var = parser->mkVar(var_sort, var_name);
         
         // 生成随机值
         if (var_sort->isInt()) {
             std::uniform_int_distribution<int> int_dist(-100, 100);
             int value = int_dist(rng);
-            auto value_node = std::make_shared<SMTLIBParser::DAGNode>(std::to_string(value));
+            auto value_node = parser->mkConstInt(value);
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var, value_node);
         } else if (var_sort->isReal()) {
             std::uniform_real_distribution<double> real_dist(-100.0, 100.0);
             double value = real_dist(rng);
-            std::stringstream ss;
-            ss << value;
-            auto value_node = std::make_shared<SMTLIBParser::DAGNode>(ss.str());
+            auto value_node = parser->mkConstReal(value);
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var, value_node);
         } else if (var_sort->isBool()) {
             std::uniform_int_distribution<int> bool_dist(0, 1);
             bool value = bool_dist(rng) == 1;
             auto value_node = value ? parser->mkTrue() : parser->mkFalse();
             variable_values[var_name] = value_node;
+            // 添加到模型中
+            model.add(var, value_node);
         }
         
         variables.push_back(var);
@@ -723,16 +850,54 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> constraints;
     for (int i = 0; i < num_constraints; ++i) {
         try {
-            auto constraint = generateConstraint(3); // 深度限制为3
+            // 使用更高的深度生成更复杂的约束
+            auto constraint = generateConstraint(4); // 增加深度到4
+            
+            // 确保不是简单的true/false约束
+            if (constraint->isTrue() || constraint->isFalse()) {
+                // 如果是简单常量，重新生成
+                i--; // 重试这个约束
+                continue;
+            }
+            
             constraints.push_back(constraint);
             
             std::cout << "constraint " << i << " generated" << std::endl;
             std::cout << SMTLIBParser::dumpSMTLIB2(constraint) << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "Warning: Failed to generate constraint " << i << ": " << e.what() << std::endl;
-            // 生成一个简单的约束替代
-            auto simple_constraint = parser->mkTrue();
-            constraints.push_back(simple_constraint);
+            // 生成一个简单的满足约束替代
+            if (i == 0) {
+                // 确保至少有一个可满足的约束
+                auto var = variables[0]; // 使用第一个变量
+                if (var->getSort()->isInt()) {
+                    // 创建一个总是成立的约束，如 x >= x
+                    auto constraint = parser->mkGe(var, var);
+                    constraints.push_back(constraint);
+                    std::cout << "constraint " << i << " generated (fallback)" << std::endl;
+                    std::cout << SMTLIBParser::dumpSMTLIB2(constraint) << std::endl;
+                } else if (var->getSort()->isBool()) {
+                    // 创建 x OR (NOT x)
+                    auto not_var = parser->mkNot(var);
+                    std::vector<std::shared_ptr<SMTLIBParser::DAGNode>> children = {var, not_var};
+                    auto constraint = parser->mkOr(children);
+                    constraints.push_back(constraint);
+                    std::cout << "constraint " << i << " generated (fallback)" << std::endl;
+                    std::cout << SMTLIBParser::dumpSMTLIB2(constraint) << std::endl;
+                } else {
+                    // 默认创建true
+                    auto constraint = parser->mkTrue();
+                    constraints.push_back(constraint);
+                    std::cout << "constraint " << i << " generated (fallback)" << std::endl;
+                    std::cout << SMTLIBParser::dumpSMTLIB2(constraint) << std::endl;
+                }
+            } else {
+                // 非第一个约束可以是true
+                auto constraint = parser->mkTrue();
+                constraints.push_back(constraint);
+                std::cout << "constraint " << i << " generated (fallback)" << std::endl;
+                std::cout << SMTLIBParser::dumpSMTLIB2(constraint) << std::endl;
+            }
         }
     }
     
@@ -776,7 +941,7 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     outfile.close();
     std::cout << "Successfully generated SMTLIB2 file: " << output_path << std::endl;
     
-    // 打印模型文件的路径，但不实际生成模型文件
+    // 生成模型文件
     std::filesystem::path output_file_path(output_path);
     std::string model_path;
     
@@ -789,8 +954,12 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
                      output_file_path.stem().string() + ".model";
     }
     
-    std::cout << "Model file would be generated as: " << model_path << std::endl;
-    std::cout << "Note: Model file generation is currently disabled." << std::endl;
+    try {
+        generateModelFile(model_path);
+        std::cout << "Model file generated as: " << model_path << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Warning: Failed to generate model file: " << e.what() << std::endl;
+    }
 }
 
 } // namespace SMTLIBGenerator
