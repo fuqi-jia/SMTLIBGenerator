@@ -25,16 +25,34 @@ std::set<SMTLIBParser::NODE_KIND> getNTAOperators() {
         
         // 超越函数
         SMTLIBParser::NODE_KIND::NT_POW,
+        SMTLIBParser::NODE_KIND::NT_POW2,
         SMTLIBParser::NODE_KIND::NT_SQRT,
         SMTLIBParser::NODE_KIND::NT_EXP,
         SMTLIBParser::NODE_KIND::NT_LOG,
         SMTLIBParser::NODE_KIND::NT_LN,
+        SMTLIBParser::NODE_KIND::NT_LG,
+        SMTLIBParser::NODE_KIND::NT_LB
+        // 三角函数
         SMTLIBParser::NODE_KIND::NT_SIN,
         SMTLIBParser::NODE_KIND::NT_COS,
         SMTLIBParser::NODE_KIND::NT_TAN,
+        SMTLIBParser::NODE_KIND::NT_COT,
+        SMTLIBParser::NODE_KIND::NT_SEC,
+        SMTLIBParser::NODE_KIND::NT_CSC,
+        SMTLIBParser::NODE_KIND::NT_SINH,
+        SMTLIBParser::NODE_KIND::NT_COSH,
+        SMTLIBParser::NODE_KIND::NT_TANH,
+        SMTLIBParser::NODE_KIND::NT_COTH,
+        SMTLIBParser::NODE_KIND::NT_SECH,
+        SMTLIBParser::NODE_KIND::NT_CSCH,
         SMTLIBParser::NODE_KIND::NT_ASIN,
         SMTLIBParser::NODE_KIND::NT_ACOS,
-        SMTLIBParser::NODE_KIND::NT_ATAN
+        SMTLIBParser::NODE_KIND::NT_ATAN,
+        SMTLIBParser::NODE_KIND::NT_ASINH,
+        SMTLIBParser::NODE_KIND::NT_ACOSH,
+        SMTLIBParser::NODE_KIND::NT_ATANH,
+        SMTLIBParser::NODE_KIND::NT_ACOTH,
+        SMTLIBParser::NODE_KIND::NT_ASECH,
     };
     
     return operators;
