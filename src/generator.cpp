@@ -788,7 +788,7 @@ void Generator::generateSMTLIB2File(const std::string& output_path, int num_vars
     model_outfile << "    {" << std::endl;
     model_outfile << "      \"variables\":{" << std::endl;
     for (const auto& var: model->getVars()) {
-        model_outfile << "        " << var->getName() << ": " << model->get(var)->toString() << "," << std::endl;
+        model_outfile << "        \"" << var->getName() << "\": " << model->get(var)->toString() << "," << std::endl;
     }
     model_outfile << "      }," <<std::endl;
     model_outfile << "      \"confidence\": 1.0" <<std::endl;
